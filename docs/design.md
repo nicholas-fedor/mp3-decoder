@@ -23,3 +23,20 @@ A free-format header gives no frame size. `Find` measures it from the next two h
 The encoder delay and padding come from the LAME extension of any encoder, as mpg123 reads them. FFmpeg reads them only from LAME and FFmpeg's own encoders. The frame count excludes the tag's frame, and the byte count includes it. So `Info.Samples` is the frame count times the samples per frame, less the delay and padding.
 
 `container.TrailerSize` removes ID3v1, APEv2 and Lyrics3 v2.00 tags from the end of a stream in any order. Taggers write APEv2 before ID3v1, so a search for APEv2 only at the very end, as FFmpeg does, would miss it.
+
+## Huffman decoding
+
+The code words in `huffman/codebook` are the source data. They are laid out as the published tables list them, one code word for each value, and the decoder never reads them. `huffman` decodes through lookup tables built from them, which its own test generates into `lookup_gen.go`. `go generate` runs that test with `-update`, and without `-update` the same test fails when the file is stale.
+
+Each lookup entry is 16 bits. A leaf holds x, y and the number of the code word's bits its level takes. A pointer holds where a subtable starts and how many bits it indexes by. Each table's first level indexes by the fewest bits that send at most 1 decode in 20 to a subtable, by the probability of 2^-length a code word's length implies. That gives first levels of 3 to 10 bits and 7,337 entries in all. The entries are padded to 8,192, a power of two, so a masked index needs no bounds check. Tables that share code words share entries.
+
+Following FFmpeg, the unused tables 4 and 14 decode as table 0, whose values are zeros coded in no bits. Following FFmpeg too, a count1 quadruple with any bit past the region's end, its signs included, is left out. mpg123 checks only the code word, so it keeps a quadruple whose signs run past the end and then reports an error.
+
+Generated tables were measured against the same tables built at run time, with the same decode code and array type:
+
+| | Generated | Built at run time |
+| --- | --- | --- |
+| Decoding table 13 from 64 KiB of random bits | 582 µs | 597 µs |
+| Building every table once per process | none | 419 µs and 447 KB |
+
+Decoding big_values pairs takes 10 to 15 ns a pair on random bits, with no allocations.

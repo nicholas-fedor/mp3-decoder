@@ -20,5 +20,8 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `container`: VBRI tag | FFmpeg, libavformat/mp3dec.c (mp3_parse_vbri_tag) |
 | `container`: seek table offsets | LAME info tag |
 | `huffman/codebook`: Huffman code tables | Transcribed from FFmpeg, libavcodec/mpegaudiodec_common.c (mpa_hufflens, mpa_huffsymbols, mpa_quad_codes, mpa_quad_bits and ff_mpa_huff_data), LGPL-2.1-or-later. Every code word and length agrees with the decode trees of dist10, lsf/decoder/tables/huffdec. The 1288 entries that parse from Sieler and Sperschneider, Tables 24 to 41, agree too |
+| `huffman`: decoding order of code words, linbits and signs | Sieler and Sperschneider, Table 6 (huffmancodebits) |
+| `huffman`: tables 4 and 14 decoding as table 0 | FFmpeg, libavcodec/mpegaudiodec_common.c (ff_mpa_huff_data) |
+| `huffman`: a count1 quadruple past the region's end left out | FFmpeg, libavcodec/mpegaudiodec_template.c (huffman_decode) |
 
 No part adapts another decoder's code. The Huffman code tables are data transcribed from FFmpeg.
