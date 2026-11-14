@@ -18,7 +18,7 @@ type Mode uint8
 type Header struct {
 	// SampleRate is the sampling frequency in Hz.
 	SampleRate int
-	// Bitrate is the bitrate in bit/s, or 0 in a free-format stream.
+	// Bitrate is the bitrate in bit/s, or 0 for a free-format header that Find has not measured.
 	Bitrate int
 	// Version is the MPEG version.
 	Version Version
@@ -28,6 +28,8 @@ type Header struct {
 	Mode Mode
 	// Extension is the mode extension of a joint stereo frame.
 	Extension uint8
+	// Free reports whether the stream is free format, whose bitrate the header does not give.
+	Free bool
 	// Padding reports whether the frame holds one extra slot.
 	Padding bool
 	// Protected reports whether a CRC follows the header.
@@ -177,6 +179,7 @@ func Parse(head []byte) (Header, bool) {
 		Layer:      layer,
 		Mode:       modes[word>>modeShift&twoBits],
 		Extension:  uint8(word >> extensionShift & twoBits),
+		Free:       index == 0,
 		Padding:    word>>paddingShift&1 == 1,
 		Protected:  word>>protectionShift&1 == 0,
 	}, true
@@ -220,7 +223,7 @@ func (h Header) DataAt() int {
 //   - bool: whether the headers can belong to the same stream.
 func (h Header) SameStream(other Header) bool {
 	return h.Version == other.Version && h.Layer == other.Layer && h.SampleRate == other.SampleRate &&
-		(h.Bitrate == 0) == (other.Bitrate == 0)
+		h.Free == other.Free
 }
 
 // Samples returns the number of samples per channel in the frame.
@@ -259,26 +262,40 @@ func (h Header) SideInfoSize() int {
 
 // Size returns the size of the frame, header included.
 //
-// A free-format header does not give it.
+// A free-format header gives no size until Find measures its bitrate.
 //
 // Returns:
-//   - int: the size in bytes, or 0 in a free-format stream.
+//   - int: the size in bytes, or 0 when the bitrate is unknown.
 func (h Header) Size() int {
 	if h.Bitrate == 0 {
 		return 0
 	}
 
-	slot := 1
-	if h.Layer == Layer1 {
-		slot = layer1Slot
-	}
+	return h.Samples()*h.Bitrate/(bitsPerByte*h.slot()*h.SampleRate)*h.slot() + h.padding()
+}
 
-	slots := h.Samples() * h.Bitrate / (bitsPerByte * slot * h.SampleRate)
+// padding returns the size of the frame's padding.
+//
+// Returns:
+//   - int: the size in bytes, which is one slot or 0.
+func (h Header) padding() int {
 	if h.Padding {
-		slots++
+		return h.slot()
 	}
 
-	return slots * slot
+	return 0
+}
+
+// slot returns the size of one slot.
+//
+// Returns:
+//   - int: the size in bytes, 4 for Layer I and 1 otherwise.
+func (h Header) slot() int {
+	if h.Layer == Layer1 {
+		return layer1Slot
+	}
+
+	return 1
 }
 
 // bitrate looks up a bitrate index.

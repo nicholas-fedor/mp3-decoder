@@ -11,5 +11,7 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `frame`: bitrate tables | dist10, lsf/decoder/common.c |
 | `frame`: frame size | dist10, lsf/decoder/musicout.c. FFmpeg, libavcodec/mpegaudiodecheader.c computes the same |
 | `frame`: acceptance rules | FFmpeg, libavcodec/mpegaudiodecheader.h and mpegaudiodecheader.c |
+| `frame`: CRC-16 | Sieler and Sperschneider, section 4.3.3 and Table 22. dist10, lsf/decoder/common.c (update_CRC) |
+| `frame`: free-format frame size | mpg123, src/libmpg123/parse.c (guess_freeformat_framesize) and the 3456-byte bound in src/libmpg123/frame.h |
 
 No part adapts another decoder's code.

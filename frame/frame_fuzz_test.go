@@ -5,6 +5,7 @@ package frame
 
 import (
 	"encoding/binary"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,6 +49,37 @@ func FuzzParse(f *testing.F) {
 		if size := head.Size(); size != 0 {
 			assert.GreaterOrEqual(t, size, head.DataAt())
 		}
+	})
+}
+
+// FuzzFind checks that a confirmed frame parses to the returned header and that a header of its
+// stream follows it, and that every offset Find returns lies within the window.
+//
+// The seed corpus holds two frames, junk before them, a free-format stream and a window that ends
+// before the second header.
+func FuzzFind(f *testing.F) {
+	two := slices.Concat(sized(mpeg1Frame, 417), sized(mpeg1Frame, 417))
+	free := slices.Concat(sized(freeFrame, 300), sized(freeFrame, 300), sized(freeFrame, 300))
+
+	for _, window := range [][]byte{two, slices.Concat([]byte{0xff, 0xfe, 0x00}, two), free, two[:419]} {
+		f.Add(window)
+	}
+
+	f.Fuzz(func(t *testing.T, window []byte) {
+		at, head, found := Find(window, nil)
+
+		require.GreaterOrEqual(t, at, 0)
+		require.LessOrEqual(t, at, len(window))
+
+		if !found {
+			return
+		}
+
+		parsed, ok := Parse(window[at:])
+		require.True(t, ok)
+		assert.True(t, head.SameStream(parsed))
+		require.Positive(t, head.Size())
+		assert.Equal(t, confirmed, follows(window[at:], head, head.Size()))
 	})
 }
 

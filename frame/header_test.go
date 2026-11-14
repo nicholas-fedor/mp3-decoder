@@ -101,7 +101,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "free format",
 			head: encode(fields{version: rawMPEG1, layer: rawLayer3, unprotected: true}),
-			want: Header{SampleRate: 44100, Version: MPEG1, Layer: Layer3, Mode: Stereo},
+			want: Header{SampleRate: 44100, Version: MPEG1, Layer: Layer3, Mode: Stereo, Free: true},
 			ok:   true,
 		},
 		{
@@ -158,7 +158,7 @@ func TestHeaderSize(t *testing.T) {
 			36,
 		},
 		{"MPEG-2 Layer II", Header{SampleRate: 24000, Bitrate: 160000, Version: MPEG2, Layer: Layer2}, 960},
-		{"free format", Header{SampleRate: 44100, Version: MPEG1, Layer: Layer3}, 0},
+		{"unmeasured free format", Header{SampleRate: 44100, Version: MPEG1, Layer: Layer3, Free: true}, 0},
 	}
 
 	for _, tt := range tests {
@@ -303,7 +303,7 @@ func TestHeaderSameStream(t *testing.T) {
 		{SampleRate: 48000, Bitrate: 128000, Version: MPEG1, Layer: Layer3},
 		{SampleRate: 44100, Bitrate: 128000, Version: MPEG1, Layer: Layer2},
 		{SampleRate: 22050, Bitrate: 128000, Version: MPEG2, Layer: Layer3},
-		{SampleRate: 44100, Version: MPEG1, Layer: Layer3},
+		{SampleRate: 44100, Version: MPEG1, Layer: Layer3, Free: true},
 	}
 	for _, other := range differ {
 		assert.False(t, base.SameStream(other), "%+v", other)

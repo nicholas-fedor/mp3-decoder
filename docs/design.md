@@ -9,3 +9,9 @@ The decoder plays what the leading decoders play. Where a written description is
 - MPEG-2.5 in all three layers, with the full MPEG-2 bitrate table. Sieler and Sperschneider, Table 8, marks MPEG-2.5 bitrate indexes 9 to 14 as forbidden.
 - The reserved emphasis value.
 - Free format, whose frame size the header does not give.
+
+## Finding frames
+
+`frame.Find` takes a frame only when the header after it belongs to the same stream. A stream keeps its version, layer and sampling frequency, and a free-format stream stays free format. Bitrate, padding and mode may change from frame to frame.
+
+A free-format header gives no frame size. `Find` measures it from the next two headers, up to 3456 bytes as mpg123 allows. Two headers must follow at one spacing plus each frame's padding. The returned header then carries the bitrate that spacing gives, so its `Size` works like any other.

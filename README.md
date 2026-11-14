@@ -17,7 +17,7 @@ The frame header parser is complete. The decoder is in development.
 
 | Package | Contents |
 | --- | --- |
-| [frame](frame) | Frame headers of every layer and version |
+| [frame](frame) | Frame headers of every layer and version, the confirmed frame search and the CRC check |
 
 ## Documentation
 
