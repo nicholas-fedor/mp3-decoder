@@ -40,3 +40,9 @@ Generated tables were measured against the same tables built at run time, with t
 | Building every table once per process | none | 419 µs and 447 KB |
 
 Decoding big_values pairs takes 10 to 15 ns a pair on random bits, with no allocations.
+
+## Side information
+
+`layer3.SideInfo` holds what the bitstream transmits, in its own terms, and nothing derived. Two fields are derived later by the stage that owns their meaning. The regions of a granule with window switching are implicit, and their boundaries depend on the scalefactor bands, so the spectrum stage sets them. The preflag of an MPEG-2 or MPEG-2.5 granule is coded in scalefac_compress, so the scalefactor stage decodes it.
+
+A granule with window switching and block type 0 makes the frame invalid, as in FFmpeg and mpg123. A big_values count above 288 is read as 288, as mpg123 does, where FFmpeg rejects the frame.

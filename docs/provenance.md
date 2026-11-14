@@ -23,5 +23,8 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `huffman`: decoding order of code words, linbits and signs | Sieler and Sperschneider, Table 6 (huffmancodebits) |
 | `huffman`: tables 4 and 14 decoding as table 0 | FFmpeg, libavcodec/mpegaudiodec_common.c (ff_mpa_huff_data) |
 | `huffman`: a count1 quadruple past the region's end left out | FFmpeg, libavcodec/mpegaudiodec_template.c (huffman_decode) |
+| `layer3`: side information fields and layouts | Sieler and Sperschneider, Tables 4 and 13 and section 4.2.4 |
+| `layer3`: window switching with block type 0 rejected | Sieler and Sperschneider, section 4.2.4 (block_type). FFmpeg, libavcodec/mpegaudiodec_template.c (mp_decode_layer3). mpg123, src/libmpg123/layer3.c (III_get_side_info) |
+| `layer3`: big_values above 288 read as 288 | mpg123, src/libmpg123/layer3.c (III_get_side_info) |
 
 No part adapts another decoder's code. The Huffman code tables are data transcribed from FFmpeg.
