@@ -102,7 +102,7 @@ func FuzzID3v2Size(f *testing.F) {
 			return
 		}
 
-		assert.GreaterOrEqual(t, size, id3HeaderSize)
+		assert.GreaterOrEqual(t, size, ID3v2HeaderSize)
 		assert.Equal(t, id3Magic, string(head[:len(id3Magic)]))
 	})
 }
