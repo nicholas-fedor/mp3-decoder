@@ -45,6 +45,9 @@ This document explains how the decoder is built and why, part by part. Each sect
     - [Stages](#stages)
     - [Mixed Blocks at 8 kHz](#mixed-blocks-at-8-khz)
     - [Exact Transform Tables](#exact-transform-tables)
+  - [Polyphase Synthesis](#polyphase-synthesis)
+    - [Flow](#flow)
+    - [Window](#window)
 - [Performance](#performance)
 
 ## Principles
@@ -56,6 +59,8 @@ The decoder plays what the leading decoders play. Where a written description is
 ### Tables
 
 Tables the bitstream defines are written as literals, laid out as the published tables list them. Tables derived from them are generated into `*_gen.go` files by the test of the package that uses them. `go generate` runs that test with `-update`, and without `-update` the same test fails when a file is stale. Nothing is computed when a program starts.
+
+Generated values are computed from closed forms with `math/big` and rounded to the nearest float64, so no table depends on the accuracy of package `math`. Sines and cosines come from the test-only package `internal/trig`, which sums their Taylor series to 320 bits with π from Machin's formula.
 
 ## Stream Structure
 
@@ -114,6 +119,7 @@ The package `internal/layer3` decodes each granule of each channel in these stag
 6. [Stereo](#stereo) restores the left and right channels of a joint stereo granule.
 7. [Reordering](#reordering) interleaves the windows of short blocks for the IMDCT.
 8. The [hybrid filterbank](#hybrid-filterbank), in the package `internal/hybrid`, turns each channel's lines into subband samples.
+9. [Polyphase synthesis](#polyphase-synthesis), in the package `internal/synth`, turns each set of 32 subband samples into 32 PCM samples.
 
 ### Side Information
 
@@ -305,7 +311,30 @@ With 2, lines 36 to 71 would take short block IMDCTs while every stage before th
 
 #### Exact Transform Tables
 
-The alias butterflies, the windows and the IMDCT cosines are generated into `filterbank_gen.go`. Every angle is a multiple of π/72. The generator computes π from Machin's formula and each cosine from its Taylor series, to 320 bits with `math/big`, then rounds to the nearest float64. The published coefficients C are parsed as exact decimals. A forward MDCT in the tests encodes random subband signals through long, start, short and stop blocks, and the filterbank gives them back to within 1e-12.
+The alias butterflies, the windows and the IMDCT cosines are generated into `filterbank_gen.go`. Every angle is a multiple of π/72, and the published coefficients C are parsed as exact decimals. A forward MDCT in the tests encodes random subband signals through long, start, short and stop blocks, and the filterbank gives them back to within 1e-12.
+
+### Polyphase Synthesis
+
+`synth.Filterbank` is the polyphase synthesis filterbank that every layer shares. Each call turns one sample of each of the 32 subbands into the next 32 PCM samples, unclipped.
+
+#### Flow
+
+The filterbank follows the published flow directly:
+
+1. Matrixing turns the subband samples S(k) into 64 values V(i), the sum over k of S(k) cos(π/64 (16+i)(2k+1)).
+2. V becomes the newest of the 16 vectors kept, and the oldest is dropped.
+3. Output sample j sums 16 window taps: for each of the 8 groups g, tap D(64g+j) times value j of vector 2g, and tap D(64g+32+j) times value 32+j of vector 2g+1, counting vectors from the newest.
+
+The 16 vectors live in a ring of 1024 values, so a call writes 64 values instead of shifting all 1024.
+
+#### Window
+
+The 512 taps D(i) are exact multiples of 2^-16. FFmpeg lists the first 257 as integers in those units, and tap 512-i is tap i, negated unless i is a multiple of 64. The window is generated from that list, and the test checks every tap against dist10's table of 512 taps to 9 decimals.
+
+Two further checks bind the window and the matrixing together:
+
+- The impulse response of subband k is D(n) cos(π/64 (16 + n mod 64)(2k+1)) for the 512 samples the window spans, then silence.
+- Random PCM through the published analysis filterbank, whose window is D/32, and back through synthesis returns 481 samples late. The error stays under 1e-4, the near reconstruction the filterbank pair was designed for.
 
 ## Performance
 
@@ -320,3 +349,4 @@ Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates.
 | Stereo | A 128 kbit/s LAME joint stereo file | About 230 ns a granule of both channels |
 | Reordering | A granule of short blocks | About 310 ns |
 | Hybrid filterbank, with the direct IMDCT | Random lines | About 5.9 µs a granule of long blocks, and 3.8 µs of short blocks |
+| Polyphase synthesis, with direct matrixing | Random subband samples | About 19 µs a granule of one channel |

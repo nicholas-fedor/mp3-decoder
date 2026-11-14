@@ -43,5 +43,8 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `hybrid`: alias reduction butterflies and coefficients | Sieler and Sperschneider, section 4.3.12.1 and Table 60. dist10, lsf/decoder/decode.c (III_antialias) |
 | `hybrid`: IMDCT, windows, overlap-add and frequency inversion | Sieler and Sperschneider, sections 4.3.12.2 to 4.3.12.5, whose copy lacks the equation images. dist10, lsf/decoder/decode.c (inv_mdct and III_hybrid) |
 | `hybrid`: 4 long subbands in mixed blocks at 8 kHz | Sieler and Sperschneider, section 4.3.12.1 (sb_amount) |
+| `synth`: matrixing, the V vector and the windowed sum | Sieler and Sperschneider, section 4.3.12.6 and Figure 2. dist10, lsf/decoder/decode.c (SubBandSynthesis) |
+| `synth`: synthesis window taps | Transcribed from FFmpeg, libavcodec/mpegaudiodsp_data.c (ff_mpa_enwindow), LGPL-2.1-or-later, with the symmetry of libavcodec/mpegaudiodsp_template.c (ff_mpa_synth_init). Every tap agrees with dist10, lsf/decoder/tables/dewindow |
+| `trig`: π and cosines | Machin's formula and the Taylor series of the cosine |
 
-No part adapts another decoder's code. The Huffman code tables are data transcribed from FFmpeg.
+No part adapts another decoder's code. The Huffman code tables and the synthesis window taps are data transcribed from FFmpeg.

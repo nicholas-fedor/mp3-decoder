@@ -17,6 +17,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/nicholas-fedor/mp3-decoder/internal/trig"
 )
 
 // tables holds every generated table.
@@ -239,11 +241,9 @@ func assertSamples(t *testing.T, want, got *[Samples][Subbands]float64, name str
 
 // closedTables computes every generated table from its closed form.
 //
-// Every angle is a multiple of π/72, and each sine is the cosine of its complement.
+// The alias butterflies come from the published coefficients as exact decimals.
 func closedTables() tables {
 	var out tables
-
-	pi := bigPi()
 
 	for i, published := range publishedAlias {
 		c, _, err := big.ParseFloat(published, 10, precision, big.ToNearestEven)
@@ -259,7 +259,7 @@ func closedTables() tables {
 	}
 
 	for i := range longPoints {
-		long := rounded(cosine(pi, 36-(2*i+1)))
+		long := trig.Sin(2*i+1, 72)
 		out.longWindows[Normal][i] = long
 
 		switch {
@@ -268,25 +268,32 @@ func closedTables() tables {
 		case i < 24:
 			out.longWindows[Start][i] = 1
 		case i < 30:
-			out.longWindows[Start][i] = rounded(cosine(pi, 36-3*(2*(i-18)+1)))
+			out.longWindows[Start][i] = trig.Sin(2*(i-18)+1, 24)
 		}
 
 		out.longWindows[Stop][longPoints-1-i] = out.longWindows[Start][i]
 
 		for k := range Samples {
-			out.longCosines[i][k] = rounded(cosine(pi, (2*i+19)*(2*k+1)))
+			out.longCosines[i][k] = trig.Cos((2*i+19)*(2*k+1), 72)
 		}
 	}
 
 	for i := range shortPoints {
-		out.shortWindow[i] = rounded(cosine(pi, 36-3*(2*i+1)))
+		out.shortWindow[i] = trig.Sin(2*i+1, 24)
 
 		for k := range shortPoints / 2 {
-			out.shortCosines[i][k] = rounded(cosine(pi, 3*(2*i+7)*(2*k+1)))
+			out.shortCosines[i][k] = trig.Cos((2*i+7)*(2*k+1), 24)
 		}
 	}
 
 	return out
+}
+
+// rounded returns a closed form rounded to the nearest float64.
+func rounded(value *big.Float) float64 {
+	result, _ := value.Float64()
+
+	return result
 }
 
 // hybridSource writes the generated file for the tables.

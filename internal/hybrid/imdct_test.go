@@ -5,7 +5,6 @@ package hybrid
 
 import (
 	"math"
-	"math/big"
 	"math/rand/v2"
 	"testing"
 
@@ -89,63 +88,4 @@ func windowOracle(window Window, i int) float64 {
 	default:
 		return long
 	}
-}
-
-// bigPi returns π from Machin's formula, π = 16 atan(1/5) - 4 atan(1/239).
-func bigPi() *big.Float {
-	first := arctanInverse(5)
-	first.Mul(first, big.NewFloat(16))
-
-	second := arctanInverse(239)
-	second.Mul(second, big.NewFloat(4))
-
-	return first.Sub(first, second)
-}
-
-// arctanInverse returns atan(1/x) from its series, the sum of (-1)^n / ((2n+1) x^(2n+1)).
-func arctanInverse(x int64) *big.Float {
-	sum := new(big.Float).SetPrec(precision)
-	power := new(big.Float).SetPrec(precision).Quo(big.NewFloat(1), big.NewFloat(float64(x)))
-	square := big.NewFloat(float64(x * x))
-
-	for n := int64(0); power.MantExp(nil) > -precision-8; n++ {
-		term := new(big.Float).SetPrec(precision).Quo(power, big.NewFloat(float64(2*n+1)))
-		if n%2 == 0 {
-			sum.Add(sum, term)
-		} else {
-			sum.Sub(sum, term)
-		}
-
-		power.Quo(power, square)
-	}
-
-	return sum
-}
-
-// cosine returns cos(π m/72) from its Taylor series, after reducing m to a period.
-func cosine(pi *big.Float, m int) *big.Float {
-	m = max(m, -m) % 144
-
-	x := new(big.Float).SetPrec(precision).Mul(pi, big.NewFloat(float64(m)))
-	x.Quo(x, big.NewFloat(72))
-
-	square := new(big.Float).SetPrec(precision).Mul(x, x)
-	sum := new(big.Float).SetPrec(precision).SetInt64(1)
-	term := new(big.Float).SetPrec(precision).SetInt64(1)
-
-	for n := int64(1); term.Sign() != 0 && term.MantExp(nil) > -precision-8; n++ {
-		term.Mul(term, square)
-		term.Quo(term, big.NewFloat(float64((2*n-1)*(2*n))))
-		term.Neg(term)
-		sum.Add(sum, term)
-	}
-
-	return sum
-}
-
-// rounded returns a closed form rounded to the nearest float64.
-func rounded(value *big.Float) float64 {
-	result, _ := value.Float64()
-
-	return result
 }
