@@ -16,8 +16,8 @@ type Spectrum struct {
 	// Values holds the quantized value of each of the granule's 576 lines.
 	//
 	// Long blocks hold the lines in order of frequency. Short blocks hold each short band's lines
-	// window by window, as the bitstream sends them, and mixed blocks hold 36 long block lines
-	// before their short bands.
+	// window by window, as the bitstream sends them. Mixed blocks hold long block lines up to where
+	// short band 3 starts, then their short bands.
 	Values [granuleLines]int
 	// Decoded is the number of values the Huffman data gave, and every value after them is 0.
 	Decoded int

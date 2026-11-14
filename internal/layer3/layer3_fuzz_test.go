@@ -228,3 +228,65 @@ func FuzzSpectrum(f *testing.F) {
 		}
 	})
 }
+
+// FuzzStereo restores joint stereo lines drawn from any bytes under any MPEG-1 block, mode and
+// intensity positions, and checks every line against the formulas. It then reorders both channels
+// and checks that each holds the same lines as before.
+//
+// Each pair of bytes gives a line's left and right values between -1 and 1, and lines past the
+// bytes are 0. Positions run from 0 to 15, so most code none. The seed corpus holds a long block
+// with values in both channels, a short block with a silent right channel, and mixed blocks with
+// the right channel silent above line 40.
+func FuzzStereo(f *testing.F) {
+	f.Add(slices.Repeat([]byte{0x40, 0x20}, granuleLines), []byte{0, 0, 3, 3, 1, 4, 1, 5, 9, 2, 6})
+	f.Add(slices.Repeat([]byte{0x7f, 0x00}, granuleLines), []byte{1, 3, 1, 0, 1, 2, 3, 4, 5, 6})
+	f.Add(slices.Repeat([]byte{0x81, 0x33}, 20), []byte{2, 4, 3, 6, 6, 6, 0, 0, 0, 7, 8})
+
+	kinds := []GranuleInfo{
+		{},
+		{BlockType: StartBlock},
+		{BlockType: StopBlock},
+		{BlockType: ShortBlocks},
+		{BlockType: ShortBlocks, MixedBlock: true},
+	}
+
+	f.Fuzz(func(t *testing.T, data, fields []byte) {
+		if len(fields) < 4 {
+			return
+		}
+
+		widths := publishedWidths[int(fields[0])%len(mpeg1Rates)]
+		info := kinds[int(fields[1])%len(kinds)]
+		head := frame.Header{
+			SampleRate: widths.rate, Version: frame.MPEG1, Layer: frame.Layer3,
+			Mode: frame.JointStereo, Extension: fields[2] % 4,
+		}
+
+		factors := Scalefactors{mixed: info.BlockType == ShortBlocks && info.MixedBlock}
+		for at := range shortSent {
+			factors.values[at] = fields[3+at%(len(fields)-3)] % 16
+		}
+
+		var left, right [granuleLines]float64
+
+		for line := range min(len(data)/2, granuleLines) {
+			left[line] = float64(int8(data[2*line])) / 128
+			right[line] = float64(int8(data[2*line+1])) / 128
+		}
+
+		places := linePlaces(&info, widths.long, widths.short)
+		wantLeft, wantRight := stereoOracle(head, &left, &right, &places, &factors)
+
+		Stereo(head, &left, &right, &info, &factors)
+
+		assertLines(t, &wantLeft, &left, "left")
+		assertLines(t, &wantRight, &right, "right")
+
+		for _, lines := range []*[granuleLines]float64{&left, &right} {
+			before := slices.Sorted(slices.Values(lines[:]))
+
+			Reorder(head, lines, &info)
+			require.Equal(t, before, slices.Sorted(slices.Values(lines[:])))
+		}
+	})
+}

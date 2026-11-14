@@ -15,8 +15,6 @@ const (
 	subblockStep = 8
 	// maxMagnitude is the largest quantized magnitude, 15 and the most 13 linbits add.
 	maxMagnitude = 15 + 1<<13 - 1
-	// mixedShortBand is the first short band of mixed blocks, whose start ends their long bands.
-	mixedShortBand = 3
 	// quarterSteps is the number of quarter steps in a factor of 2.
 	quarterSteps = 4
 	// exponentBias is the bias of a float64's exponent.

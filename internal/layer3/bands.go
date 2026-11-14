@@ -13,8 +13,13 @@ type bands struct {
 	short [shortBands + 1]int
 }
 
-// shortBands is the number of short block bands.
-const shortBands = 13
+// Short band counts.
+const (
+	// shortBands is the number of short block bands.
+	shortBands = 13
+	// mixedShortBand is the first short band of mixed blocks, whose start ends their long bands.
+	mixedShortBand = 3
+)
 
 // bandTables holds the bands of each sampling frequency, each entry its rate, long bands and short
 // bands.

@@ -19,13 +19,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// update rewrites requantize_gen.go from the closed forms instead of checking it.
-var update = flag.Bool("update", false, "rewrite requantize_gen.go from the closed forms")
+// update rewrites the generated tables from their closed forms instead of checking them.
+var update = flag.Bool("update", false, "rewrite the generated tables from their closed forms")
 
 // Requantization test constants.
 const (
-	// generatedFile is the file the requantization tables are generated into.
-	generatedFile = "requantize_gen.go"
+	// requantizeFile is the file the requantization tables are generated into.
+	requantizeFile = "requantize_gen.go"
 	// precision is the number of bits the closed forms are computed to before rounding.
 	precision = 256
 	// tolerance is the largest relative difference the formula oracle may show.
@@ -54,7 +54,7 @@ func TestRequantizeTables(t *testing.T) {
 	}
 
 	if *update {
-		require.NoError(t, os.WriteFile(generatedFile, requantizeSource(t, &powers, &quarters), 0o644))
+		require.NoError(t, os.WriteFile(requantizeFile, requantizeSource(t, &powers, &quarters), 0o644))
 
 		return
 	}

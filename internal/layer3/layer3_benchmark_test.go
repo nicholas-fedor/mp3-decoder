@@ -176,3 +176,84 @@ func BenchmarkRequantize(b *testing.B) {
 
 	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N*len(granules)), "ns/granule")
 }
+
+// BenchmarkStereo measures restoring the left and right lines of each granule of a 128 kbit/s joint
+// stereo file that LAME encoded, most of whose granules use mid/side stereo.
+func BenchmarkStereo(b *testing.B) {
+	data, err := os.ReadFile("testdata/mpeg1-joint.mp3")
+	require.NoError(b, err)
+
+	type granule struct {
+		lines   [2][granuleLines]float64
+		factors Scalefactors
+		info    GranuleInfo
+		head    frame.Header
+	}
+
+	var (
+		granules  []granule
+		reservoir Reservoir
+		stream    bits.Reader
+		factors   [2]Scalefactors
+		spectrum  Spectrum
+	)
+
+	for at := 0; at < len(data); {
+		head, ok := frame.Parse(data[at:])
+		require.True(b, ok)
+
+		end := at + head.Size()
+
+		var side SideInfo
+
+		require.NoError(b, side.Parse(head, data[at:end]))
+
+		main, _ := reservoir.MainData(side.MainDataBegin, data[at+head.DataAt():end])
+		start := 0
+
+		for gr := range 2 {
+			g := granule{head: head, info: side.Granules[gr][1]}
+
+			for ch := range 2 {
+				info := &side.Granules[gr][ch]
+
+				stream.Reset(main, start)
+				factors[ch].ReadMPEG1(&stream, &side, gr, ch)
+				spectrum.Read(&stream, head, info, start+info.Part23Length)
+				spectrum.Requantize(&g.lines[ch], info, &factors[ch])
+
+				start += info.Part23Length
+			}
+
+			g.factors = factors[1]
+			granules = append(granules, g)
+		}
+
+		at = end
+	}
+
+	for b.Loop() {
+		for at := range granules {
+			g := &granules[at]
+			Stereo(g.head, &g.lines[0], &g.lines[1], &g.info, &g.factors)
+		}
+	}
+
+	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N*len(granules)), "ns/granule")
+}
+
+// BenchmarkReorder measures reordering one channel's granule of short blocks at 44.1 kHz.
+func BenchmarkReorder(b *testing.B) {
+	var lines [granuleLines]float64
+
+	for line := range lines {
+		lines[line] = float64(line)
+	}
+
+	head := frame.Header{SampleRate: 44100}
+	info := GranuleInfo{BlockType: ShortBlocks}
+
+	for b.Loop() {
+		Reorder(head, &lines, &info)
+	}
+}

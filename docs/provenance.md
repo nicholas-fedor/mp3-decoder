@@ -36,5 +36,9 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `layer3`: requantization formula | dist10, lsf/decoder/decode.c (III_dequantize_sample). Sieler and Sperschneider, section 4.3.9, whose copy lacks the equation images |
 | `layer3`: pretab | Sieler and Sperschneider, Table 23. FFmpeg, libavcodec/mpegaudiodec_common.c (ff_mpa_pretab) agrees |
 | `layer3`: pretab in the long bands of mixed blocks, and the mixed boundary at short band 3 | FFmpeg, libavcodec/mpegaudiodec_template.c (exponents_from_scale_factors and compute_band_indexes) |
+| `layer3`: mid/side and intensity stereo formulas, the intensity bound in each window, and position 7 coding none | Sieler and Sperschneider, section 4.3.11, whose copy lacks the equation images. dist10, lsf/decoder/decode.c (III_stereo) |
+| `layer3`: stereo applied before reordering, from the right channel's block type, with the bound tested on the lines and positions 8 to 15 coding none | FFmpeg, libavcodec/mpegaudiodec_template.c (compute_stereo and mp_decode_layer3). mpg123, src/libmpg123/layer3.c (III_i_stereo) shares the bound and block type |
+| `layer3`: the long bands of mixed blocks coded only when no short window holds a value, and the last bands taking the position below them | dist10, lsf/decoder/decode.c (III_stereo). FFmpeg, libavcodec/mpegaudiodec_template.c (compute_stereo) and mpg123, src/libmpg123/layer3.c (III_i_stereo) agree |
+| `layer3`: short block reordering | Sieler and Sperschneider, section 4.3.10. FFmpeg, libavcodec/mpegaudiodec_template.c (reorder_block) |
 
 No part adapts another decoder's code. The Huffman code tables are data transcribed from FFmpeg.

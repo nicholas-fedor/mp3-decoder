@@ -36,6 +36,11 @@ This document explains how the decoder is built and why, part by part. Each sect
     - [Formula](#formula)
     - [Mixed Blocks](#mixed-blocks)
     - [Exact Tables](#exact-tables)
+  - [Stereo](#stereo)
+    - [Mid/Side](#midside)
+    - [Intensity Bound](#intensity-bound)
+    - [Intensity Positions](#intensity-positions)
+  - [Reordering](#reordering)
 - [Performance](#performance)
 
 ## Principles
@@ -102,6 +107,8 @@ The package `internal/layer3` decodes each granule of each channel in these stag
 3. [Scalefactors](#scalefactors) come first in each granule's part of the main data.
 4. [Spectral values](#spectrum) follow, Huffman coded in regions bounded by the [scalefactor bands](#scalefactor-bands).
 5. [Requantization](#requantization) scales the spectral values by the gains and scalefactors.
+6. [Stereo](#stereo) restores the left and right channels of a joint stereo granule.
+7. [Reordering](#reordering) interleaves the windows of short blocks for the IMDCT.
 
 ### Side Information
 
@@ -224,6 +231,44 @@ Mixed blocks scale their lines as long bands up to where short band 3 starts, an
 
 Building the power of two from its bits takes about 125 ns a granule against 155 ns with `math.Ldexp`, for the same values.
 
+### Stereo
+
+`layer3.Stereo` restores the left and right channels of an MPEG-1 joint stereo granule from the requantized lines, before reordering, as FFmpeg, Symphonia and dist10 order the stages. A stream should give both channels the same block type. Like FFmpeg and mpg123, the stage reads the block type and intensity positions of the right channel.
+
+#### Mid/Side
+
+Mid/side stereo turns the mid and side lines M and S into left (M+S)/√2 and right (M-S)/√2. With intensity stereo on too, only the bands that intensity stereo does not code take it.
+
+#### Intensity Bound
+
+Intensity stereo codes the bands above the highest band in which the right channel holds a value. The stage tests the requantized lines, as FFmpeg and mpg123 do, rather than the count of decoded values. So decoded zeros above the last value lie above the bound, and a silent band below that value does not.
+
+| Granule | Bound |
+| --- | --- |
+| Long blocks | The highest long band with a value |
+| Short blocks | The highest short band with a value, in each window |
+| Mixed blocks | Each window's short bands as in short blocks. The long bands have a bound of their own only when no window holds a value in a short band, and take none otherwise |
+
+The long bands of mixed blocks end where short band 3 starts, as in [requantization](#mixed-blocks).
+
+#### Intensity Positions
+
+A band above the bound holds the left channel's value v and takes its position p from the right channel's scalefactors. It becomes left v k/(1+k) and right v/(1+k), where k = tan(p π/12). The ratios for positions 0 to 6 are generated from their closed forms in √3, computed to 256 bits with `math/big`, as the [requantization tables](#exact-tables) are.
+
+| Case | This decoder, as FFmpeg | mpg123 | dist10 |
+| --- | --- | --- | --- |
+| Position 7 | Codes none | Codes none | Codes none |
+| Positions 8 to 15, which 4-bit scalefactors in long bands 0 to 10 and short bands 0 to 5 can send | Code none | Scale by tan(p π/12), which makes position 9 scale by about 10^38 | Scale by tan(p π/12) |
+| Long band 21 and short band 12, which send no scalefactor | Take the position of the band below | Take the position of the band below | Take the position of the band below |
+
+A band that codes no position takes mid/side stereo when the frame has it, and keeps its channels otherwise.
+
+### Reordering
+
+Short blocks hold each short band's lines window by window, as the bitstream sends them. `layer3.Reorder` moves line f of window w, counted from the window's first line, to line 3f+w. The 18 lines of each subband then hold its 6 frequencies, the three windows interleaved, which is how the IMDCT reads them. Mixed blocks keep their long block lines in place.
+
+FFmpeg, Symphonia and dist10 reorder in a pass of their own after stereo, and mpg123 writes the requantized lines in this order directly. A separate pass keeps stereo working on whole runs of one window. Short blocks are rare, so the pass costs little.
+
 ## Performance
 
 Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates.
@@ -234,3 +279,5 @@ Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates.
 | Main data from the bit reservoir | A 128 kbit/s LAME file | About 15 ns a frame |
 | Scalefactors and spectral values | A 128 kbit/s LAME file | About 390 ns a granule of one channel |
 | Requantization | A 128 kbit/s LAME file | About 130 ns a granule of one channel |
+| Stereo | A 128 kbit/s LAME joint stereo file | About 230 ns a granule of both channels |
+| Reordering | A granule of short blocks | About 310 ns |
