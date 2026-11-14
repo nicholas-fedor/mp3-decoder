@@ -76,6 +76,11 @@ const (
 	crcSize = 2
 )
 
+// MaxSize is the size in bytes of the largest frame.
+//
+// Only a free-format frame reaches it. The largest frame at a fixed bitrate holds 1729 bytes.
+const MaxSize = 3456
+
 // Header fields, as shifts of the 32-bit header.
 const (
 	// syncShift is the shift of the 11-bit sync word.

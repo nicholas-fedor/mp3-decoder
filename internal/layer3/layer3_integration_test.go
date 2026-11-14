@@ -184,44 +184,69 @@ func TestParseDecisions(t *testing.T) {
 func TestParseEncodedFiles(t *testing.T) {
 	t.Parallel()
 
-	for _, name := range []string{"mpeg1-joint.mp3", "mpeg1-mono.mp3", "mpeg2.mp3", "mpeg25.mp3", "protected.mp3"} {
+	for _, name := range encodedFiles {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-
-			data, err := os.ReadFile("testdata/" + name)
-			require.NoError(t, err)
-
-			at, first, ok := frame.Find(data, nil)
-			require.True(t, ok)
 
 			var side layer3.SideInfo
 
 			blocks := map[layer3.BlockType]int{}
 
-			for at < len(data) {
-				head, ok := frame.Parse(data[at:])
-				require.True(t, ok)
-				require.True(t, first.SameStream(head))
+			for at, data := range encodedFrames(t, name) {
+				head, _ := frame.Parse(data)
+				require.NoError(t, side.Parse(head, data))
 
-				end := at + head.Size()
-				require.NoError(t, side.Parse(head, data[at:end]))
-
-				bits := 0
+				assert.LessOrEqual(t, granuleBits(head, &side), 8*(side.MainDataBegin+len(data)-head.DataAt()), "frame %d", at)
 
 				for _, granule := range side.Granules {
 					for _, info := range granule[:head.Channels()] {
-						bits += info.Part23Length
 						blocks[info.BlockType]++
 					}
 				}
-
-				assert.LessOrEqual(t, bits, 8*(side.MainDataBegin+head.Size()-head.DataAt()), "frame at %d", at)
-
-				at = end
 			}
 
 			assert.Positive(t, blocks[layer3.ShortBlocks], "short blocks")
 			assert.Positive(t, slices.Max([]int{blocks[layer3.StartBlock], blocks[layer3.StopBlock]}), "start or stop blocks")
 		})
 	}
+}
+
+// encodedFiles names the files LAME encoded into testdata.
+var encodedFiles = []string{"mpeg1-joint.mp3", "mpeg1-mono.mp3", "mpeg2.mp3", "mpeg25.mp3", "protected.mp3"}
+
+// encodedFrames reads the frames of a file in testdata, which must all be of one stream.
+func encodedFrames(t *testing.T, name string) [][]byte {
+	t.Helper()
+
+	data, err := os.ReadFile("testdata/" + name)
+	require.NoError(t, err)
+
+	at, first, ok := frame.Find(data, nil)
+	require.True(t, ok)
+
+	var frames [][]byte
+
+	for at < len(data) {
+		head, ok := frame.Parse(data[at:])
+		require.True(t, ok)
+		require.True(t, first.SameStream(head))
+
+		frames = append(frames, data[at:at+head.Size()])
+		at += head.Size()
+	}
+
+	return frames
+}
+
+// granuleBits returns the number of bits a frame's granules take in its main data.
+func granuleBits(head frame.Header, side *layer3.SideInfo) int {
+	bits := 0
+
+	for _, granule := range side.Granules {
+		for _, info := range granule[:head.Channels()] {
+			bits += info.Part23Length
+		}
+	}
+
+	return bits
 }

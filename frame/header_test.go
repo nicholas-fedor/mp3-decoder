@@ -133,7 +133,8 @@ func TestHeaderSize(t *testing.T) {
 	}
 }
 
-// TestHeaderSizeClosedForm checks the size of every valid header against the per-layer formulas.
+// TestHeaderSizeClosedForm checks the size of every valid header against the per-layer formulas and
+// against [MaxSize].
 func TestHeaderSizeClosedForm(t *testing.T) {
 	t.Parallel()
 
@@ -148,6 +149,7 @@ func TestHeaderSizeClosedForm(t *testing.T) {
 						require.True(t, ok)
 
 						assert.Equal(t, closedFormSize(head), head.Size(), "%+v", head)
+						assert.LessOrEqual(t, head.Size(), MaxSize, "%+v", head)
 					}
 				}
 			}

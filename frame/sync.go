@@ -16,9 +16,6 @@ const (
 	undecided
 )
 
-// maxFreeSize is the size in bytes of the largest free-format frame Find measures.
-const maxFreeSize = 3456
-
 // Find finds the first frame in window that the header after it confirms.
 //
 // A frame counts only when accept takes its header. A free-format frame needs two headers after it
@@ -89,7 +86,7 @@ func judge(frame []byte, head Header) (Header, verdict) {
 //   - Header: the header, with the bitrate the frame's size gives when it is confirmed.
 //   - verdict: the verdict.
 func measure(frame []byte, head Header) (Header, verdict) {
-	for size := head.DataAt() + head.padding(); size <= maxFreeSize; size++ {
+	for size := head.DataAt() + head.padding(); size <= MaxSize; size++ {
 		switch follows(frame, head, size) {
 		case undecided:
 			return head, undecided

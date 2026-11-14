@@ -139,13 +139,13 @@ func TestFindFreeFormatUnconfirmed(t *testing.T) {
 	assert.Zero(t, at)
 	assert.False(t, confirmed)
 
-	lone := freeHead.Frame(2 * maxFreeSize)
+	lone := freeHead.Frame(2 * MaxSize)
 	at, _, confirmed = Find(lone, nil)
 
 	assert.Equal(t, len(lone)-HeaderSize+1, at)
 	assert.False(t, confirmed)
 
-	pair := slices.Concat(freeHead.Frame(300), freeHead.Frame(2*maxFreeSize))
+	pair := slices.Concat(freeHead.Frame(300), freeHead.Frame(2*MaxSize))
 	at, _, confirmed = Find(pair, nil)
 
 	assert.Equal(t, len(pair)-HeaderSize+1, at)

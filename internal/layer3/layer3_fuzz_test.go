@@ -4,7 +4,9 @@
 package layer3
 
 import (
+	"encoding/binary"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -89,4 +91,59 @@ func checkGranule(t *testing.T, info GranuleInfo, lay layout) {
 	assert.Zero(t, info.TableSelect[2])
 	assert.Zero(t, info.Region0Count)
 	assert.Zero(t, info.Region1Count)
+}
+
+// FuzzReservoir feeds a reservoir frames that any bytes script and checks each frame's main data
+// and missing count against a history of every byte added since the last reset.
+//
+// Each frame takes three bytes. A first byte of 0 resets the reservoir instead. The first two give
+// main_data_begin, up to 599 to cover a begin past the 511 bytes the reservoir holds, and the third
+// gives the frame's size in steps of 16 bytes, up to 4080 to cover frames past the largest. The seed
+// corpus holds a stream start, a reach across frames, an underflow after a reset and a frame past
+// the largest.
+func FuzzReservoir(f *testing.F) {
+	f.Add([]byte{0x01, 0x00, 0x10})
+	f.Add([]byte{0x01, 0x00, 0x04, 0x01, 0x00, 0x04, 0x01, 0xff, 0x01})
+	f.Add([]byte{0x01, 0x00, 0x10, 0x00, 0x01, 0x40, 0x02})
+	f.Add([]byte{0x01, 0x00, 0xff, 0x01, 0xff, 0x01})
+
+	f.Fuzz(func(t *testing.T, script []byte) {
+		var (
+			reservoir Reservoir
+			history   []byte
+		)
+
+		for len(script) > 0 {
+			if script[0] == 0 {
+				reservoir.Reset()
+
+				history, script = history[:0], script[1:]
+
+				continue
+			}
+
+			if len(script) < 3 {
+				return
+			}
+
+			begin := int(binary.BigEndian.Uint16(script) % 600)
+			own := make([]byte, int(script[2])*16)
+
+			for i := range own {
+				own[i] = byte(len(history) + i)
+			}
+
+			script = script[3:]
+
+			main, missing := reservoir.MainData(begin, own)
+
+			kept := own[:min(len(own), frame.MaxSize)]
+			reach := min(begin, len(history), reservoirSize)
+
+			assert.Equal(t, string(slices.Concat(history[len(history)-reach:], kept)), string(main))
+			assert.Equal(t, begin-reach, missing)
+
+			history = append(history, kept...)
+		}
+	})
 }

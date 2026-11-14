@@ -46,3 +46,11 @@ Decoding big_values pairs takes 10 to 15 ns a pair on random bits, with no alloc
 `layer3.SideInfo` holds what the bitstream transmits, in its own terms, and nothing derived. Two fields are derived later by the stage that owns their meaning. The regions of a granule with window switching are implicit, and their boundaries depend on the scalefactor bands, so the spectrum stage sets them. The preflag of an MPEG-2 or MPEG-2.5 granule is coded in scalefac_compress, so the scalefactor stage decodes it.
 
 A granule with window switching and block type 0 makes the frame invalid, as in FFmpeg and mpg123. A big_values count above 288 is read as 288, as mpg123 does, where FFmpeg rejects the frame.
+
+## Bit reservoir
+
+`layer3.Reservoir` holds the last 511 bytes of main data, the furthest a 9-bit main_data_begin reaches back. An MPEG-2 or MPEG-2.5 frame reaches back at most 255 bytes, so the same reservoir serves it. Like mpg123, the reservoir holds every byte of past main data, even bytes that granules of past frames read. FFmpeg and Symphonia hold only the bytes after the last granule they read. They lose a frame whose main data overlaps the frame before it, which mpg123 plays.
+
+A frame's own main data is copied after the bytes it reaches back to, so later stages read one contiguous slice. No frame holds more than 3456 bytes, so a fixed buffer of 3967 bytes serves every frame and nothing is allocated. Handing out a frame's main data takes about 15 ns.
+
+When the reservoir holds fewer bytes than main_data_begin, as at the start of a stream joined midway or after a resync, it reports how many bytes are missing. It keeps the frame's own main data either way, so the frames after it can begin in it.
