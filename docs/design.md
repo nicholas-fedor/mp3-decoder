@@ -54,3 +54,9 @@ A granule with window switching and block type 0 makes the frame invalid, as in 
 A frame's own main data is copied after the bytes it reaches back to, so later stages read one contiguous slice. No frame holds more than 3456 bytes, so a fixed buffer of 3967 bytes serves every frame and nothing is allocated. Handing out a frame's main data takes about 15 ns.
 
 When the reservoir holds fewer bytes than main_data_begin, as at the start of a stream joined midway or after a resync, it reports how many bytes are missing. It keeps the frame's own main data either way, so the frames after it can begin in it.
+
+## Scalefactors
+
+`layer3.Scalefactors` keeps a granule's scalefactors in the order the bitstream sends them, and `Long` and `Short` find them by band. Both granules of a channel are read into one value, so the second granule keeps the groups that scfsi marks without a copy. The values stay as sent, without the pretab, since the second granule reuses them under its own preflag.
+
+A stream should never mark groups when either granule of the channel has short blocks. One that does reuses the values sent in the same places, as FFmpeg and mpg123 both read it.

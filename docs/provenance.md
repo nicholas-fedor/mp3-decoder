@@ -28,5 +28,7 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `layer3`: big_values above 288 read as 288 | mpg123, src/libmpg123/layer3.c (III_get_side_info) |
 | `layer3`: bit reservoir of every past main data byte, up to 511, emptied on resync | mpg123, src/libmpg123/layer3.c (III_get_side_info) and src/libmpg123/parse.c |
 | `layer3`: missing bytes counted and the frame's main data kept on underflow | Symphonia, symphonia-bundle-mp3/src/layer3/mod.rs (BitResevoir::fill). FFmpeg, libavcodec/mpegaudiodec_template.c (mp_decode_layer3) |
+| `layer3`: MPEG-1 scalefactor widths, order and scfsi groups | Sieler and Sperschneider, Tables 15 and 16 and section 4.2.4 (main_data) |
+| `layer3`: scalefactors kept in the order sent, with scfsi reusing their places | FFmpeg, libavcodec/mpegaudiodec_template.c (mp_decode_layer3). mpg123, src/libmpg123/layer3.c (III_get_scale_factors_1) |
 
 No part adapts another decoder's code. The Huffman code tables are data transcribed from FFmpeg.
