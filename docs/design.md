@@ -41,6 +41,10 @@ This document explains how the decoder is built and why, part by part. Each sect
     - [Intensity Bound](#intensity-bound)
     - [Intensity Positions](#intensity-positions)
   - [Reordering](#reordering)
+  - [Hybrid Filterbank](#hybrid-filterbank)
+    - [Stages](#stages)
+    - [Mixed Blocks at 8 kHz](#mixed-blocks-at-8-khz)
+    - [Exact Transform Tables](#exact-transform-tables)
 - [Performance](#performance)
 
 ## Principles
@@ -109,6 +113,7 @@ The package `internal/layer3` decodes each granule of each channel in these stag
 5. [Requantization](#requantization) scales the spectral values by the gains and scalefactors.
 6. [Stereo](#stereo) restores the left and right channels of a joint stereo granule.
 7. [Reordering](#reordering) interleaves the windows of short blocks for the IMDCT.
+8. The [hybrid filterbank](#hybrid-filterbank), in the package `internal/hybrid`, turns each channel's lines into subband samples.
 
 ### Side Information
 
@@ -269,6 +274,39 @@ Short blocks hold each short band's lines window by window, as the bitstream sen
 
 FFmpeg, Symphonia and dist10 reorder in a pass of their own after stereo, and mpg123 writes the requantized lines in this order directly. A separate pass keeps stereo working on whole runs of one window. Short blocks are rare, so the pass costs little.
 
+### Hybrid Filterbank
+
+`hybrid.Filterbank` turns one channel's granule of 576 lines into 18 samples of each of the 32 polyphase subbands. It keeps the second half of each subband's last block for the next granule. The caller says how many of the lowest subbands hold long blocks, and which window they take, so the package needs no Layer III types.
+
+#### Stages
+
+| Stage | What it does |
+| --- | --- |
+| Alias reduction | 8 butterflies across each boundary between two subbands of long blocks. A butterfly turns the lower line l and upper line u into l Cs - u Ca and u Cs + l Ca, where Cs = 1/√(1+C²) and Ca = C/√(1+C²) |
+| Long blocks | A 36-point IMDCT of each subband's 18 lines, then the normal, start or stop window |
+| Short blocks | Three 12-point IMDCTs of 6 lines each, short windowed and starting 6, 12 and 18 samples into the 36-sample block |
+| Overlap-add | The first half of each block adds to the second half of the subband's block before |
+| Frequency inversion | Every odd sample of every odd subband is negated |
+
+The IMDCT is computed directly from its definition, a sum of 18 or 6 products for each sample.
+
+#### Mixed Blocks at 8 kHz
+
+The long blocks of mixed blocks end where short band 3 starts, line 36 or line 72 at 8 kHz, as in [requantization](#mixed-blocks). So the filterbank transforms 2 subbands as long blocks, or 4 at 8 kHz, and reduces aliasing between them.
+
+| Decoder | Long subbands of mixed blocks at 8 kHz |
+| --- | --- |
+| This decoder | 4, as Sieler and Sperschneider give for alias reduction |
+| FFmpeg | 2, marked unchecked in its code, though its requantization and reordering treat 72 lines as long |
+| mpg123 | 2 |
+| dist10 | 2 |
+
+With 2, lines 36 to 71 would take short block IMDCTs while every stage before them holds those lines as long block lines in order of frequency.
+
+#### Exact Transform Tables
+
+The alias butterflies, the windows and the IMDCT cosines are generated into `filterbank_gen.go`. Every angle is a multiple of π/72. The generator computes π from Machin's formula and each cosine from its Taylor series, to 320 bits with `math/big`, then rounds to the nearest float64. The published coefficients C are parsed as exact decimals. A forward MDCT in the tests encodes random subband signals through long, start, short and stop blocks, and the filterbank gives them back to within 1e-12.
+
 ## Performance
 
 Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates.
@@ -281,3 +319,4 @@ Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates.
 | Requantization | A 128 kbit/s LAME file | About 130 ns a granule of one channel |
 | Stereo | A 128 kbit/s LAME joint stereo file | About 230 ns a granule of both channels |
 | Reordering | A granule of short blocks | About 310 ns |
+| Hybrid filterbank, with the direct IMDCT | Random lines | About 5.9 µs a granule of long blocks, and 3.8 µs of short blocks |

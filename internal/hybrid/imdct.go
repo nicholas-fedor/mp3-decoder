@@ -1,0 +1,59 @@
+// Copyright (c) Nicholas Fedor 2026 <nick@nickfedor.com>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package hybrid
+
+// longBlock windows the 36-point IMDCT of a long block subband.
+//
+// Sample i of the IMDCT is the sum over the 18 lines X(k) of X(k) cos(π/72 (2i+19)(2k+1)).
+//
+// Parameters:
+//   - dst: the windowed block.
+//   - in: the subband's 18 lines.
+//   - window: the block's window.
+func longBlock(dst *[longPoints]float64, in []float64, window Window) {
+	shape := &longWindows[window]
+
+	in = in[:Samples]
+
+	for at := range longPoints {
+		cosines := &longCosines[at]
+
+		var sum float64
+
+		for k, value := range in {
+			sum += float64(value * cosines[k])
+		}
+
+		dst[at] = float64(sum * shape[at])
+	}
+}
+
+// shortBlock windows the three 12-point IMDCTs of a short block subband and overlaps them.
+//
+// Sample i of each window's IMDCT is the sum over its 6 lines X(k) of X(k) cos(π/24 (2i+7)(2k+1)).
+// The windows start 6, 12 and 18 samples into the block, and the block is 0 outside them.
+//
+// Parameters:
+//   - dst: the windowed block.
+//   - in: the subband's 18 lines, line f of window w at 3f+w.
+func shortBlock(dst *[longPoints]float64, in []float64) {
+	*dst = [longPoints]float64{}
+	in = in[:Samples]
+
+	for window := range shortWindows {
+		start := shortStep * (window + 1)
+
+		for at := range shortPoints {
+			cosines := &shortCosines[at]
+
+			var sum float64
+
+			for k := range shortPoints / 2 {
+				sum += float64(in[shortWindows*k+window] * cosines[k])
+			}
+
+			dst[start+at] += float64(sum * shortWindow[at])
+		}
+	}
+}

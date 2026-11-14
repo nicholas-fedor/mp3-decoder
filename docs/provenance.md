@@ -40,5 +40,8 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `layer3`: stereo applied before reordering, from the right channel's block type, with the bound tested on the lines and positions 8 to 15 coding none | FFmpeg, libavcodec/mpegaudiodec_template.c (compute_stereo and mp_decode_layer3). mpg123, src/libmpg123/layer3.c (III_i_stereo) shares the bound and block type |
 | `layer3`: the long bands of mixed blocks coded only when no short window holds a value, and the last bands taking the position below them | dist10, lsf/decoder/decode.c (III_stereo). FFmpeg, libavcodec/mpegaudiodec_template.c (compute_stereo) and mpg123, src/libmpg123/layer3.c (III_i_stereo) agree |
 | `layer3`: short block reordering | Sieler and Sperschneider, section 4.3.10. FFmpeg, libavcodec/mpegaudiodec_template.c (reorder_block) |
+| `hybrid`: alias reduction butterflies and coefficients | Sieler and Sperschneider, section 4.3.12.1 and Table 60. dist10, lsf/decoder/decode.c (III_antialias) |
+| `hybrid`: IMDCT, windows, overlap-add and frequency inversion | Sieler and Sperschneider, sections 4.3.12.2 to 4.3.12.5, whose copy lacks the equation images. dist10, lsf/decoder/decode.c (inv_mdct and III_hybrid) |
+| `hybrid`: 4 long subbands in mixed blocks at 8 kHz | Sieler and Sperschneider, section 4.3.12.1 (sb_amount) |
 
 No part adapts another decoder's code. The Huffman code tables are data transcribed from FFmpeg.
