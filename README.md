@@ -18,6 +18,7 @@ The frame header parser is complete. The decoder is in development.
 | Package | Contents |
 | --- | --- |
 | [frame](frame) | Frame headers of every layer and version, the confirmed frame search and the CRC check |
+| [container](container) | ID3v2 headers, end-of-stream tags, and the Xing, Info, LAME and VBRI tags |
 
 ## Testing
 

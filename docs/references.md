@@ -25,6 +25,7 @@ ISO's licence forbids redistributing the conformance bitstreams, so they are nev
 | ID3v2.3 | <https://id3.org/id3v2.3.0> | ID3v2.3 tag header |
 | ID3v2.4 | <https://id3.org/id3v2.4.0-structure> | ID3v2.4 tag header and footer |
 | ID3v1 | <https://id3.org/ID3v1> | The 128-byte trailer |
+| Lyrics3 v2.00 | <https://id3.org/Lyrics3v2> | The Lyrics3 trailer |
 | RFC 3003 | <https://www.rfc-editor.org/rfc/rfc3003.html> | The audio/mpeg media type |
 | RFC 5219 | <https://www.rfc-editor.org/rfc/rfc5219.html> | The Layer III frame as header, side information and main data |
 
