@@ -4,50 +4,13 @@
 package frame
 
 import (
-	"encoding/binary"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/nicholas-fedor/mp3-decoder/internal/mp3test"
 )
-
-// fields holds the raw bit values of a frame header's fields.
-type fields struct {
-	version, layer, bitrate, rate, mode, ext, emphasis uint32
-	padding, unprotected                               bool
-}
-
-// Raw field values for building headers.
-const (
-	// rawMPEG1 is the version bits of MPEG-1.
-	rawMPEG1 = 3
-	// rawMPEG2 is the version bits of MPEG-2.
-	rawMPEG2 = 2
-	// rawMPEG25 is the version bits of MPEG-2.5.
-	rawMPEG25 = 0
-	// rawLayer1 is the layer bits of Layer I.
-	rawLayer1 = 3
-	// rawLayer2 is the layer bits of Layer II.
-	rawLayer2 = 2
-	// rawLayer3 is the layer bits of Layer III.
-	rawLayer3 = 1
-)
-
-// encode builds the four header bytes for f.
-func encode(f fields) []byte {
-	word := uint32(syncWord)<<syncShift | f.version<<versionShift | f.layer<<layerShift |
-		f.bitrate<<bitrateShift | f.rate<<rateShift | f.mode<<modeShift | f.ext<<extensionShift | f.emphasis
-
-	if f.unprotected {
-		word |= 1 << protectionShift
-	}
-
-	if f.padding {
-		word |= 1 << paddingShift
-	}
-
-	return binary.BigEndian.AppendUint32(nil, word)
-}
 
 // TestParse covers valid headers of every version and layer and each value Parse rejects.
 func TestParse(t *testing.T) {
@@ -67,7 +30,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "MPEG-2 Layer III protected, padded joint stereo",
-			head: encode(fields{version: rawMPEG2, layer: rawLayer3, bitrate: 9, mode: 1, ext: 2, padding: true}),
+			head: mp3test.Header{Version: mp3test.MPEG2, Layer: mp3test.Layer3, Bitrate: 9, Mode: mp3test.JointStereo, Extension: 2, Padding: true, Protected: true}.Bytes(),
 			want: Header{
 				SampleRate: 22050, Bitrate: 80000, Version: MPEG2, Layer: Layer3, Mode: JointStereo,
 				Extension: 2, Padding: true, Protected: true,
@@ -76,46 +39,46 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "MPEG-2.5 Layer III mono at 8 kHz",
-			head: encode(fields{version: rawMPEG25, layer: rawLayer3, bitrate: 1, rate: 2, mode: 3, unprotected: true}),
+			head: mp3test.Header{Version: mp3test.MPEG25, Layer: mp3test.Layer3, Bitrate: 1, Rate: 2, Mode: mp3test.Mono}.Bytes(),
 			want: Header{SampleRate: 8000, Bitrate: 8000, Version: MPEG25, Layer: Layer3, Mode: Mono},
 			ok:   true,
 		},
 		{
 			name: "MPEG-2.5 at the top of the MPEG-2 bitrate table",
-			head: encode(fields{version: rawMPEG25, layer: rawLayer3, bitrate: 14, rate: 1, unprotected: true}),
+			head: mp3test.Header{Version: mp3test.MPEG25, Layer: mp3test.Layer3, Bitrate: 14, Rate: 1}.Bytes(),
 			want: Header{SampleRate: 12000, Bitrate: 160000, Version: MPEG25, Layer: Layer3, Mode: Stereo},
 			ok:   true,
 		},
 		{
 			name: "MPEG-2.5 Layer II",
-			head: encode(fields{version: rawMPEG25, layer: rawLayer2, bitrate: 4, unprotected: true}),
+			head: mp3test.Header{Version: mp3test.MPEG25, Layer: mp3test.Layer2, Bitrate: 4}.Bytes(),
 			want: Header{SampleRate: 11025, Bitrate: 32000, Version: MPEG25, Layer: Layer2, Mode: Stereo},
 			ok:   true,
 		},
 		{
 			name: "MPEG-1 Layer I at its highest bitrate",
-			head: encode(fields{version: rawMPEG1, layer: rawLayer1, bitrate: 14, rate: 1, mode: 2, unprotected: true}),
+			head: mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer1, Bitrate: 14, Rate: 1, Mode: mp3test.DualChannel}.Bytes(),
 			want: Header{SampleRate: 48000, Bitrate: 448000, Version: MPEG1, Layer: Layer1, Mode: DualChannel},
 			ok:   true,
 		},
 		{
 			name: "free format",
-			head: encode(fields{version: rawMPEG1, layer: rawLayer3, unprotected: true}),
+			head: mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer3}.Bytes(),
 			want: Header{SampleRate: 44100, Version: MPEG1, Layer: Layer3, Mode: Stereo, Free: true},
 			ok:   true,
 		},
 		{
 			name: "reserved emphasis",
-			head: encode(fields{version: rawMPEG1, layer: rawLayer3, bitrate: 9, emphasis: 2, unprotected: true}),
+			head: mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer3, Bitrate: 9, Emphasis: 2}.Bytes(),
 			want: Header{SampleRate: 44100, Bitrate: 128000, Version: MPEG1, Layer: Layer3, Mode: Stereo},
 			ok:   true,
 		},
 		{name: "short", head: []byte{0xff, 0xfb, 0x90}},
 		{name: "no sync word", head: []byte{0xff, 0xdb, 0x90, 0x00}},
-		{name: "reserved version", head: encode(fields{version: 1, layer: rawLayer3, bitrate: 9})},
-		{name: "reserved layer", head: encode(fields{version: rawMPEG1, bitrate: 9})},
-		{name: "forbidden bitrate", head: encode(fields{version: rawMPEG1, layer: rawLayer3, bitrate: 15})},
-		{name: "reserved sampling frequency", head: encode(fields{version: rawMPEG1, layer: rawLayer3, rate: 3})},
+		{name: "reserved version", head: mp3test.Header{Version: 1, Layer: mp3test.Layer3, Bitrate: 9}.Bytes()},
+		{name: "reserved layer", head: mp3test.Header{Version: mp3test.MPEG1, Bitrate: 9}.Bytes()},
+		{name: "forbidden bitrate", head: mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer3, Bitrate: 15}.Bytes()},
+		{name: "reserved sampling frequency", head: mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer3, Rate: 3}.Bytes()},
 	}
 
 	for _, tt := range tests {
@@ -174,14 +137,14 @@ func TestHeaderSize(t *testing.T) {
 func TestHeaderSizeClosedForm(t *testing.T) {
 	t.Parallel()
 
-	for _, version := range []uint32{rawMPEG1, rawMPEG2, rawMPEG25} {
-		for _, layer := range []uint32{rawLayer1, rawLayer2, rawLayer3} {
+	for _, version := range []uint32{mp3test.MPEG1, mp3test.MPEG2, mp3test.MPEG25} {
+		for _, layer := range []uint32{mp3test.Layer1, mp3test.Layer2, mp3test.Layer3} {
 			for index := uint32(1); index < bitrateForbidden; index++ {
 				for rate := range uint32(rateReserved) {
 					for _, padding := range []bool{false, true} {
-						head, ok := Parse(encode(fields{
-							version: version, layer: layer, bitrate: index, rate: rate, padding: padding,
-						}))
+						head, ok := Parse(mp3test.Header{
+							Version: version, Layer: layer, Bitrate: index, Rate: rate, Padding: padding,
+						}.Bytes())
 						require.True(t, ok)
 
 						assert.Equal(t, closedFormSize(head), head.Size(), "%+v", head)

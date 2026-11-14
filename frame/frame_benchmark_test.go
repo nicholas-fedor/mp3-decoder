@@ -18,7 +18,7 @@ func BenchmarkFind(b *testing.B) {
 		noise[i] = byte(rng.Uint32())
 	}
 
-	window := slices.Concat(noise, sized(mpeg1Frame, 417), sized(mpeg1Frame, 417))
+	window := slices.Concat(noise, mpeg1Head.Frame(417), mpeg1Head.Frame(417))
 
 	b.SetBytes(int64(len(window)))
 

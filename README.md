@@ -19,6 +19,10 @@ The frame header parser is complete. The decoder is in development.
 | --- | --- |
 | [frame](frame) | Frame headers of every layer and version, the confirmed frame search and the CRC check |
 
+## Testing
+
+Each package has white-box unit tests, a black-box integration test that uses only its exported API, examples and fuzz targets. The internal package [mp3test](internal/mp3test) builds bitstreams for tests. It encodes from its own field definitions, so the parsers are not checked against themselves. Fixtures are encoded by the `generate.sh` script in each package's `testdata` directory.
+
 ## Documentation
 
 - [References](docs/references.md) lists the standards, descriptions, decoders and papers behind the code.

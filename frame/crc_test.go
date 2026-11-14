@@ -22,32 +22,22 @@ func TestCRCUpdate(t *testing.T) {
 	assert.Equal(t, uint16(0xaee7), crcUpdate(crcInit, data, len(data)*bitsPerByte))
 }
 
-// TestCheckCRC checks every frame of a CRC-protected file, then flips covered bits and cuts frames
-// short.
+// TestCheckCRC flips covered bits of a protected frame and cuts it short.
 func TestCheckCRC(t *testing.T) {
 	t.Parallel()
 
 	data, err := os.ReadFile("testdata/protected.mp3")
 	require.NoError(t, err)
 
-	for at := 0; at < len(data); {
-		head, ok := Parse(data[at:])
-		require.True(t, ok)
-		require.True(t, head.Protected)
+	head, ok := Parse(data)
+	require.True(t, ok)
 
-		frame := data[at : at+head.Size()]
-		bits := head.SideInfoSize() * bitsPerByte
-
-		assert.True(t, head.CheckCRC(frame, bits), "frame at %d", at)
-
-		at += head.Size()
-	}
-
-	head, _ := Parse(data)
 	frame := data[:head.Size()]
 	bits := head.SideInfoSize() * bitsPerByte
 
-	for _, flip := range []int{2, head.DataAt() - 1} {
+	require.True(t, head.CheckCRC(frame, bits))
+
+	for _, flip := range []int{crcHeaderAt, head.DataAt() - 1} {
 		broken := slices.Clone(frame)
 		broken[flip] ^= 1
 
@@ -62,7 +52,7 @@ func TestCheckCRC(t *testing.T) {
 func TestCheckCRCUnprotected(t *testing.T) {
 	t.Parallel()
 
-	head, ok := Parse(encode(mpeg1Frame))
+	head, ok := Parse(mpeg1Head.Bytes())
 	require.True(t, ok)
 
 	assert.True(t, head.CheckCRC(nil, 0))

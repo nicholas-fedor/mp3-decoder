@@ -10,30 +10,33 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/nicholas-fedor/mp3-decoder/internal/mp3test"
 )
 
-// readMask selects the header bits Parse reads.
+// ignoredBits selects the header bits Parse ignores.
 //
-// It leaves out the private bit, copyright, original and emphasis.
-const readMask = 0xfffffef0
+// They are the private bit, copyright, original and emphasis.
+const ignoredBits = 0x0000010f
 
-// FuzzParse checks that an accepted header re-encodes to the bits Parse read, and that its frame
-// is large enough to hold its own header, CRC and side information.
+// FuzzParse checks that the bits Parse ignores do not change its result, and that an accepted
+// header's sizes and counts lie in range.
 //
 // The seed corpus holds one header of each version and layer, free format and a header with no
 // sync word.
 func FuzzParse(f *testing.F) {
-	for _, head := range [][]byte{
-		{0xff, 0xfb, 0x90, 0x00},
-		encode(fields{version: rawMPEG2, layer: rawLayer3, bitrate: 9, mode: 1, ext: 2, padding: true}),
-		encode(fields{version: rawMPEG25, layer: rawLayer3, bitrate: 1, rate: 2, mode: 3}),
-		encode(fields{version: rawMPEG1, layer: rawLayer1, bitrate: 14, rate: 1}),
-		encode(fields{version: rawMPEG2, layer: rawLayer2, bitrate: 1, rate: 1}),
-		encode(fields{version: rawMPEG1, layer: rawLayer3}),
-		{0xff, 0xdb, 0x90, 0x00},
+	for _, head := range []mp3test.Header{
+		mpeg1Head,
+		{Version: mp3test.MPEG2, Layer: mp3test.Layer3, Bitrate: 9, Mode: mp3test.JointStereo, Extension: 2, Padding: true},
+		{Version: mp3test.MPEG25, Layer: mp3test.Layer3, Bitrate: 1, Rate: 2, Mode: mp3test.Mono, Protected: true},
+		{Version: mp3test.MPEG1, Layer: mp3test.Layer1, Bitrate: 14, Rate: 1},
+		{Version: mp3test.MPEG2, Layer: mp3test.Layer2, Bitrate: 1, Rate: 1},
+		freeHead,
 	} {
-		f.Add(head)
+		f.Add(head.Bytes())
 	}
+
+	f.Add([]byte{0xff, 0xdb, 0x90, 0x00})
 
 	f.Fuzz(func(t *testing.T, b []byte) {
 		head, ok := Parse(b)
@@ -41,13 +44,17 @@ func FuzzParse(f *testing.F) {
 			return
 		}
 
-		again, ok := Parse(reencode(head))
+		flipped := binary.BigEndian.AppendUint32(nil, binary.BigEndian.Uint32(b)^ignoredBits)
+		again, ok := Parse(flipped)
 		require.True(t, ok)
 		assert.Equal(t, head, again)
-		assert.Equal(t, binary.BigEndian.Uint32(b)&readMask, binary.BigEndian.Uint32(reencode(head))&readMask)
 
-		if size := head.Size(); size != 0 {
-			assert.GreaterOrEqual(t, size, head.DataAt())
+		assert.Contains(t, []int{384, 576, 1152}, head.Samples())
+		assert.Contains(t, []int{1, 2}, head.Channels())
+		assert.Equal(t, head.Free, head.Size() == 0)
+
+		if !head.Free {
+			assert.GreaterOrEqual(t, head.Size(), head.DataAt())
 		}
 	})
 }
@@ -58,8 +65,8 @@ func FuzzParse(f *testing.F) {
 // The seed corpus holds two frames, junk before them, a free-format stream and a window that ends
 // before the second header.
 func FuzzFind(f *testing.F) {
-	two := slices.Concat(sized(mpeg1Frame, 417), sized(mpeg1Frame, 417))
-	free := slices.Concat(sized(freeFrame, 300), sized(freeFrame, 300), sized(freeFrame, 300))
+	two := slices.Concat(mpeg1Head.Frame(417), mpeg1Head.Frame(417))
+	free := slices.Concat(freeHead.Frame(300), freeHead.Frame(300), freeHead.Frame(300))
 
 	for _, window := range [][]byte{two, slices.Concat([]byte{0xff, 0xfe, 0x00}, two), free, two[:419]} {
 		f.Add(window)
@@ -81,34 +88,4 @@ func FuzzFind(f *testing.F) {
 		require.Positive(t, head.Size())
 		assert.Equal(t, confirmed, follows(window[at:], head, head.Size()))
 	})
-}
-
-// reencode builds the header bytes for h.
-func reencode(h Header) []byte {
-	version := map[Version]uint32{MPEG1: rawMPEG1, MPEG2: rawMPEG2, MPEG25: rawMPEG25}[h.Version]
-	layer := map[Layer]uint32{Layer1: rawLayer1, Layer2: rawLayer2, Layer3: rawLayer3}[h.Layer]
-
-	table := lsfBitrates[h.Layer]
-	if h.Version == MPEG1 {
-		table = mpeg1Bitrates[h.Layer]
-	}
-
-	f := fields{
-		version: version, layer: layer, ext: uint32(h.Extension), mode: uint32(h.Mode) - 1,
-		padding: h.Padding, unprotected: !h.Protected,
-	}
-
-	for index, kbps := range table {
-		if kbps*kilo == h.Bitrate {
-			f.bitrate = uint32(index)
-		}
-	}
-
-	for index, rate := range sampleRates[h.Version] {
-		if rate == h.SampleRate {
-			f.rate = uint32(index)
-		}
-	}
-
-	return encode(f)
 }
