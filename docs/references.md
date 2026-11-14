@@ -15,7 +15,7 @@ These are the sources behind the decoder. [Provenance](provenance.md) says which
 
 ISO's licence forbids redistributing the conformance bitstreams, so they are never committed. Tests read them from a cache that a fetch task fills.
 
-## Bitstream descriptions
+## Bitstream Descriptions
 
 | Name | Document | Role |
 | --- | --- | --- |

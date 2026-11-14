@@ -1,6 +1,6 @@
 # Design
 
-## Accepting streams
+## Accepting Streams
 
 The decoder plays what the leading decoders play. Where a written description is stricter than FFmpeg and mpg123, the decoder follows FFmpeg and mpg123. A frame is still confirmed by the header that follows it before a search accepts it.
 
@@ -10,7 +10,7 @@ The decoder plays what the leading decoders play. Where a written description is
 - The reserved emphasis value.
 - Free format, whose frame size the header does not give.
 
-## Finding frames
+## Finding Frames
 
 `frame.Find` takes a frame only when the header after it belongs to the same stream. A stream keeps its version, layer and sampling frequency, and a free-format stream stays free format. Bitrate, padding and mode may change from frame to frame.
 
@@ -24,7 +24,7 @@ The encoder delay and padding come from the LAME extension of any encoder, as mp
 
 `container.TrailerSize` removes ID3v1, APEv2 and Lyrics3 v2.00 tags from the end of a stream in any order. Taggers write APEv2 before ID3v1, so a search for APEv2 only at the very end, as FFmpeg does, would miss it.
 
-## Huffman decoding
+## Huffman Decoding
 
 The code words in `huffman/codebook` are the source data. They are laid out as the published tables list them, one code word for each value, and the decoder never reads them. `huffman` decodes through lookup tables built from them, which its own test generates into `lookup_gen.go`. `go generate` runs that test with `-update`, and without `-update` the same test fails when the file is stale.
 
@@ -41,13 +41,13 @@ Generated tables were measured against the same tables built at run time, with t
 
 Decoding big_values pairs takes 10 to 15 ns a pair on random bits, with no allocations.
 
-## Side information
+## Side Information
 
 `layer3.SideInfo` holds what the bitstream transmits, in its own terms, and nothing derived. Two fields are derived later by the stage that owns their meaning. The regions of a granule with window switching are implicit, and their boundaries depend on the scalefactor bands, so the spectrum stage sets them. The preflag of an MPEG-2 or MPEG-2.5 granule is coded in scalefac_compress, so the scalefactor stage decodes it.
 
 A granule with window switching and block type 0 makes the frame invalid, as in FFmpeg and mpg123. A big_values count above 288 is read as 288, as mpg123 does, where FFmpeg rejects the frame.
 
-## Bit reservoir
+## Bit Reservoir
 
 `layer3.Reservoir` holds the last 511 bytes of main data, the furthest a 9-bit main_data_begin reaches back. An MPEG-2 or MPEG-2.5 frame reaches back at most 255 bytes, so the same reservoir serves it. Like mpg123, the reservoir holds every byte of past main data, even bytes that granules of past frames read. FFmpeg and Symphonia hold only the bytes after the last granule they read. They lose a frame whose main data overlaps the frame before it, which mpg123 plays.
 
