@@ -11,6 +11,8 @@ import (
 
 // Spectrum holds the quantized values of one channel's granule.
 type Spectrum struct {
+	// bands holds the bands of the frame's sampling frequency.
+	bands *bands
 	// Values holds the quantized value of each of the granule's 576 lines.
 	//
 	// Long blocks hold the lines in order of frequency. Short blocks hold each short band's lines
@@ -50,7 +52,9 @@ const (
 //   - info: the granule's side information.
 //   - end: the position of the bit after the granule's part2_3_length bits.
 func (s *Spectrum) Read(stream *bits.Reader, head frame.Header, info *GranuleInfo, end int) {
-	region1, region2 := regions(info, bandsAt(head.SampleRate))
+	s.bands = bandsAt(head.SampleRate)
+
+	region1, region2 := regions(info, s.bands)
 	lines := pairValues * info.BigValues
 	starts := [4]int{0, min(region1, lines), min(region2, lines), lines}
 

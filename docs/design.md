@@ -32,6 +32,10 @@ This document explains how the decoder is built and why, part by part. Each sect
     - [Sources](#sources)
   - [Spectrum](#spectrum)
     - [Regions](#regions)
+  - [Requantization](#requantization)
+    - [Formula](#formula)
+    - [Mixed Blocks](#mixed-blocks)
+    - [Exact Tables](#exact-tables)
 - [Performance](#performance)
 
 ## Principles
@@ -97,6 +101,7 @@ The package `internal/layer3` decodes each granule of each channel in these stag
 2. The [bit reservoir](#bit-reservoir) hands the frame its main data.
 3. [Scalefactors](#scalefactors) come first in each granule's part of the main data.
 4. [Spectral values](#spectrum) follow, Huffman coded in regions bounded by the [scalefactor bands](#scalefactor-bands).
+5. [Requantization](#requantization) scales the spectral values by the gains and scalefactors.
 
 ### Side Information
 
@@ -194,6 +199,31 @@ A granule without window switching sends its region boundaries as counts of long
 
 For mixed blocks at the MPEG-2.5 frequencies, mpg123 starts region1 after long band 7 instead.
 
+### Requantization
+
+#### Formula
+
+`Spectrum.Requantize` turns each quantized value v into sign(v) |v|^(4/3) 2^(e/4), as dist10 computes it. The exponent e counts quarter steps of gain:
+
+| Part of e | Long bands | Short bands |
+| --- | --- | --- |
+| Global gain | global_gain - 210 | global_gain - 210 |
+| Window | | Less 8 for each step of the window's subblock_gain |
+| Scalefactor | Less the scalefactor plus, with preflag, the pretab | Less the scalefactor |
+| Steps of a scalefactor | 2, or 4 with scalefac_scale | 2, or 4 with scalefac_scale |
+
+`Scalefactors` keeps each granule's preflag, so requantization reads it in one place for every version. Lines past the last decoded value are 0 without being computed.
+
+#### Mixed Blocks
+
+Mixed blocks scale their lines as long bands up to where short band 3 starts, and as short bands from there, as FFmpeg does. That boundary is line 36 at MPEG-1 and MPEG-2, and line 72 at 8 kHz, where no short band starts at line 36. The same boundary starts [region1](#regions) of mixed blocks.
+
+#### Exact Tables
+
+|v|^(4/3) comes from a table of every magnitude from 0 to 8206, and 2^(e/4) from one of the four powers 2^(r/4) times a power of two. Both tables are generated from closed forms computed to 256 bits with `math/big`, then rounded to the nearest float64. The power of two is built from its exponent bits, which is exact for every gain the side information can give, from 2^-325 to 2^11. So no transcendental function runs while decoding, and the result is the same on every architecture.
+
+Building the power of two from its bits takes about 125 ns a granule against 155 ns with `math.Ldexp`, for the same values.
+
 ## Performance
 
 Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates.
@@ -203,3 +233,4 @@ Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates.
 | big_values pairs | Random bits | 10 to 15 ns a pair |
 | Main data from the bit reservoir | A 128 kbit/s LAME file | About 15 ns a frame |
 | Scalefactors and spectral values | A 128 kbit/s LAME file | About 390 ns a granule of one channel |
+| Requantization | A 128 kbit/s LAME file | About 130 ns a granule of one channel |

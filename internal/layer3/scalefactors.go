@@ -16,6 +16,8 @@ type Scalefactors struct {
 	values [scalefactorCount]uint8
 	// mixed reports whether the values are those of mixed blocks.
 	mixed bool
+	// preflag reports whether the pretab adds to the long bands.
+	preflag bool
 }
 
 // Scalefactor counts.
@@ -79,6 +81,8 @@ func (s *Scalefactors) Long(band int) int {
 // granule of short blocks, which it should not, and those groups then keep the values s holds in
 // the same places.
 //
+// The granule's preflag is kept with its scalefactors for requantization.
+//
 // Parameters:
 //   - stream: the main data, at the granule's scalefactors.
 //   - side: the frame's side information.
@@ -87,6 +91,8 @@ func (s *Scalefactors) Long(band int) int {
 func (s *Scalefactors) ReadMPEG1(stream *bits.Reader, side *SideInfo, gr, ch int) {
 	info := &side.Granules[gr][ch]
 	slen := slens[info.ScalefacCompress]
+
+	s.preflag = info.Preflag
 
 	if info.BlockType != ShortBlocks {
 		s.mixed = false

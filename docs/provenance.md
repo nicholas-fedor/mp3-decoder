@@ -33,5 +33,8 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `layer3`: scalefactor band edges | Sieler and Sperschneider, Tables 42 to 59. FFmpeg, libavcodec/mpegaudiodec_common.c (ff_band_size_long and ff_band_size_short) and mpg123, src/libmpg123/l3bandgain.h (bandInfo) agree |
 | `layer3`: big_values regions and the implicit regions of granules with window switching | Sieler and Sperschneider, section 4.2.4 (region0_count and region1_count). FFmpeg, libavcodec/mpegaudiodec_template.c (init_short_region and init_long_region) |
 | `layer3`: spectrum decoding order and its end | Sieler and Sperschneider, section 4.3.8 (Huffman decoding). FFmpeg, libavcodec/mpegaudiodec_template.c (huffman_decode) |
+| `layer3`: requantization formula | dist10, lsf/decoder/decode.c (III_dequantize_sample). Sieler and Sperschneider, section 4.3.9, whose copy lacks the equation images |
+| `layer3`: pretab | Sieler and Sperschneider, Table 23. FFmpeg, libavcodec/mpegaudiodec_common.c (ff_mpa_pretab) agrees |
+| `layer3`: pretab in the long bands of mixed blocks, and the mixed boundary at short band 3 | FFmpeg, libavcodec/mpegaudiodec_template.c (exponents_from_scale_factors and compute_band_indexes) |
 
 No part adapts another decoder's code. The Huffman code tables are data transcribed from FFmpeg.

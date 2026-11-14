@@ -104,6 +104,14 @@ const (
 // bitsPerByte is the number of bits in a byte.
 const bitsPerByte = 8
 
+// Shifts that turn a scalefactor into quarter steps of gain.
+const (
+	// halfStepShift turns a scalefactor whose steps are factors of 2^(1/2) into quarter steps.
+	halfStepShift = 1
+	// wholeStepShift turns a scalefactor whose steps are factors of 2 into quarter steps.
+	wholeStepShift = 2
+)
+
 // Side information field widths shared by every version.
 const (
 	// part23Bits is the width of part2_3_length.
@@ -282,4 +290,18 @@ func (g *GranuleInfo) parse(stream *bits.Reader, lay layout) error {
 	g.Count1TableSelect = int(stream.Read(1))
 
 	return nil
+}
+
+// scalefacShift returns the shift that turns a scalefactor into quarter steps of gain.
+//
+// A scalefactor steps the gain by a factor of 2^(1/2), or of 2 with scalefac_scale.
+//
+// Returns:
+//   - int: 1, or 2 with scalefac_scale.
+func (g *GranuleInfo) scalefacShift() int {
+	if g.ScalefacScale {
+		return wholeStepShift
+	}
+
+	return halfStepShift
 }

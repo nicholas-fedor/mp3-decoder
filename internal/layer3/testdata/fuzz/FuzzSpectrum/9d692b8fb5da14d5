@@ -1,0 +1,4 @@
+go test fuzz v1
+[]byte("1\xe2Z?\xe27")
+[]byte("00  000201Y")
+uint16(265)

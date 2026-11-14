@@ -4,6 +4,7 @@
 package layer3_test
 
 import (
+	"math"
 	"math/rand/v2"
 	"slices"
 	"testing"
@@ -136,10 +137,11 @@ func TestSpectrumEnds(t *testing.T) {
 }
 
 // TestSpectrumEncodedFiles decodes the scalefactors and spectral values of every granule of MPEG-1
-// files LAME encoded.
+// files LAME encoded, and requantizes them.
 //
 // Each granule must decode all its big_values pairs and end on its last bit, unless its values fill
-// the granule first, leaving no room for another quadruple.
+// the granule first, leaving no room for another quadruple. Each spectral value must be finite, and
+// share its quantized value's sign and whether it is 0.
 func TestSpectrumEncodedFiles(t *testing.T) {
 	t.Parallel()
 
@@ -153,6 +155,7 @@ func TestSpectrumEncodedFiles(t *testing.T) {
 				stream    bits.Reader
 				factors   [2]layer3.Scalefactors
 				spectrum  layer3.Spectrum
+				lines     [576]float64
 			)
 
 			for at, data := range encodedFrames(t, name) {
@@ -173,6 +176,9 @@ func TestSpectrumEncodedFiles(t *testing.T) {
 
 						assert.GreaterOrEqual(t, spectrum.Decoded, 2*info.BigValues, "frame %d", at)
 
+						spectrum.Requantize(&lines, info, &factors[ch])
+						assertRequantized(t, &spectrum, &lines, at)
+
 						if spectrum.Decoded+4 <= 576 {
 							assert.Equal(t, end, stream.Pos(), "frame %d granule %d channel %d", at, gr, ch)
 						}
@@ -182,6 +188,20 @@ func TestSpectrumEncodedFiles(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// assertRequantized checks that each spectral value is finite and shares its quantized value's sign
+// and whether it is 0.
+func assertRequantized(t *testing.T, spectrum *layer3.Spectrum, lines *[576]float64, frame int) {
+	t.Helper()
+
+	for line, value := range lines {
+		quantized := spectrum.Values[line]
+
+		require.False(t, math.IsInf(value, 0) || math.IsNaN(value), "frame %d line %d", frame, line)
+		require.Equal(t, quantized == 0, value == 0, "frame %d line %d", frame, line)
+		require.Equal(t, quantized < 0, value < 0, "frame %d line %d", frame, line)
 	}
 }
 

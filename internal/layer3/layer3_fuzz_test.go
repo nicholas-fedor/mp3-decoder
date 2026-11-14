@@ -5,6 +5,7 @@ package layer3
 
 import (
 	"encoding/binary"
+	"math"
 	"os"
 	"slices"
 	"testing"
@@ -152,7 +153,8 @@ func FuzzReservoir(f *testing.F) {
 // FuzzSpectrum decodes spectral values from any bits under any side information and checks that
 // whole pairs and quadruples come back, that every value past them is 0 and within the widest
 // table's range, and that decoding stops with room for another quadruple only at or just past the
-// end.
+// end. It then requantizes them under scalefactors and gains drawn from the side information bytes, and checks
+// that each spectral value is finite and shares its quantized value's sign and whether it is 0.
 //
 // A pair runs at most 47 bits past the end, a 19-bit code word with 13 linbits and a sign for each
 // value. The seed corpus holds ones under long, short and mixed blocks, and no bits.
@@ -201,5 +203,28 @@ func FuzzSpectrum(f *testing.F) {
 		}
 
 		assert.Less(t, stream.Pos(), int(end)+47)
+
+		var (
+			factors Scalefactors
+			lines   [granuleLines]float64
+		)
+
+		for at := range factors.values {
+			factors.values[at] = fields[at%len(fields)] % 16
+		}
+
+		info.GlobalGain = int(fields[0])
+		info.ScalefacScale = fields[1]%2 == 1
+		info.SubblockGain = [3]int{int(fields[2] % 8), int(fields[3] % 8), int(fields[4] % 8)}
+		factors.mixed = info.BlockType == ShortBlocks && info.MixedBlock
+		factors.preflag = fields[5]%2 == 1
+
+		spectrum.Requantize(&lines, &info, &factors)
+
+		for line, value := range lines {
+			require.False(t, math.IsInf(value, 0) || math.IsNaN(value), "line %d", line)
+			require.Equal(t, spectrum.Values[line] == 0, value == 0, "line %d", line)
+			require.Equal(t, spectrum.Values[line] < 0, value < 0, "line %d", line)
+		}
 	})
 }
