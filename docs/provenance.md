@@ -1,0 +1,15 @@
+# Provenance
+
+The decoder takes each part from the best source for it. Any source whose licence combines with AGPL-3.0 may be studied, and its algorithms, tables and code may be adopted. Code adapted from another decoder is listed here with its licence. The [references](references.md) list every source.
+
+## Parts
+
+| Part | Written from |
+| --- | --- |
+| `frame`: header fields and values | Sieler and Sperschneider, Tables 2 and 7 to 13 |
+| `frame`: layer values | dist10, lsf/decoder/decode.c |
+| `frame`: bitrate tables | dist10, lsf/decoder/common.c |
+| `frame`: frame size | dist10, lsf/decoder/musicout.c. FFmpeg, libavcodec/mpegaudiodecheader.c computes the same |
+| `frame`: acceptance rules | FFmpeg, libavcodec/mpegaudiodecheader.h and mpegaudiodecheader.c |
+
+No part adapts another decoder's code.
