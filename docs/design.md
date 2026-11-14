@@ -30,7 +30,7 @@ The code words in `huffman/codebook` are the source data. They are laid out as t
 
 Each lookup entry is 16 bits. A leaf holds x, y and the number of the code word's bits its level takes. A pointer holds where a subtable starts and how many bits it indexes by. Each table's first level indexes by the fewest bits that send at most 1 decode in 20 to a subtable, by the probability of 2^-length a code word's length implies. That gives first levels of 3 to 10 bits and 7,337 entries in all. The entries are padded to 8,192, a power of two, so a masked index needs no bounds check. Tables that share code words share entries.
 
-Following FFmpeg, the unused tables 4 and 14 decode as table 0, whose values are zeros coded in no bits. Following FFmpeg too, a count1 quadruple with any bit past the region's end, its signs included, is left out. mpg123 checks only the code word, so it keeps a quadruple whose signs run past the end and then reports an error.
+Following FFmpeg, the unused tables 4 and 14 decode as table 0, whose values are zeros coded in no bits. Following FFmpeg too, big_values pairs stop at the end of the granule's bits, and a pair that starts before the end is decoded whole. mpg123 decodes every pair and drops the frame when they run past the end. A count1 quadruple with any bit past the end, its signs included, is left out, as in FFmpeg. mpg123 checks only the code word, so it keeps a quadruple whose signs run past the end and then reports an error.
 
 Generated tables were measured against the same tables built at run time, with the same decode code and array type:
 
@@ -60,3 +60,17 @@ When the reservoir holds fewer bytes than main_data_begin, as at the start of a 
 `layer3.Scalefactors` keeps a granule's scalefactors in the order the bitstream sends them, and `Long` and `Short` find them by band. Both granules of a channel are read into one value, so the second granule keeps the groups that scfsi marks without a copy. The values stay as sent, without the pretab, since the second granule reuses them under its own preflag.
 
 A stream should never mark groups when either granule of the channel has short blocks. One that does reuses the values sent in the same places, as FFmpeg and mpg123 both read it.
+
+## Scalefactor Bands
+
+Each sampling frequency has one entry that holds its rate, the first line of each long band and the first line of each short band within a window. Edges serve every stage that uses them. Region boundaries index them directly, and a band's lines run from one edge to the next. The edges are `int`, so they index the values without conversions. One frequency's entry takes 296 bytes, and a stream uses only one.
+
+FFmpeg, mpg123 and Sieler and Sperschneider agree on every edge at all nine frequencies. dist10 starts long band 18 at 24 kHz on line 330, where the others start it on line 332, and mpg123 records the change as a fixed bug.
+
+## Spectrum
+
+`layer3.Spectrum` holds a granule's 576 quantized values and how many the Huffman data gave. The big_values pairs come in up to three regions, then count1 quadruples until the granule's bits end or fewer than 4 lines remain.
+
+A granule without window switching sends its region boundaries as counts of long bands. In a granule with window switching, region1 starts after short bands 0 to 2 of each window in short and mixed blocks, and after long bands 0 to 7 in start and stop blocks, as FFmpeg sets them. There is no region2. MPEG-1 puts both boundaries at line 36. For mixed blocks at the MPEG-2.5 frequencies, mpg123 starts region1 after long band 7 instead.
+
+Reading the scalefactors and spectral values of a granule of a 128 kbit/s LAME file takes about 390 ns, with no allocations.

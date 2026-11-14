@@ -60,8 +60,8 @@ func TestBigValuesRoundTrip(t *testing.T) {
 		r.Reset(w.Bytes(), 0)
 
 		got := make([]int, len(values))
-		huffman.BigValues(&r, number, got)
 
+		require.Equal(t, len(values), huffman.BigValues(&r, number, got, w.Len()), "table %d", number)
 		require.Equal(t, values, got, "table %d", number)
 		assert.Equal(t, w.Len(), r.Pos(), "table %d", number)
 	}

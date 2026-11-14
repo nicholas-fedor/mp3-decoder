@@ -22,7 +22,7 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `huffman/codebook`: Huffman code tables | Transcribed from FFmpeg, libavcodec/mpegaudiodec_common.c (mpa_hufflens, mpa_huffsymbols, mpa_quad_codes, mpa_quad_bits and ff_mpa_huff_data), LGPL-2.1-or-later. Every code word and length agrees with the decode trees of dist10, lsf/decoder/tables/huffdec. The 1288 entries that parse from Sieler and Sperschneider, Tables 24 to 41, agree too |
 | `huffman`: decoding order of code words, linbits and signs | Sieler and Sperschneider, Table 6 (huffmancodebits) |
 | `huffman`: tables 4 and 14 decoding as table 0 | FFmpeg, libavcodec/mpegaudiodec_common.c (ff_mpa_huff_data) |
-| `huffman`: a count1 quadruple past the region's end left out | FFmpeg, libavcodec/mpegaudiodec_template.c (huffman_decode) |
+| `huffman`: big_values pairs stopping at the end of the granule's bits, and a count1 quadruple past it left out | FFmpeg, libavcodec/mpegaudiodec_template.c (huffman_decode) |
 | `layer3`: side information fields and layouts | Sieler and Sperschneider, Tables 4 and 13 and section 4.2.4 |
 | `layer3`: window switching with block type 0 rejected | Sieler and Sperschneider, section 4.2.4 (block_type). FFmpeg, libavcodec/mpegaudiodec_template.c (mp_decode_layer3). mpg123, src/libmpg123/layer3.c (III_get_side_info) |
 | `layer3`: big_values above 288 read as 288 | mpg123, src/libmpg123/layer3.c (III_get_side_info) |
@@ -30,5 +30,8 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `layer3`: missing bytes counted and the frame's main data kept on underflow | Symphonia, symphonia-bundle-mp3/src/layer3/mod.rs (BitResevoir::fill). FFmpeg, libavcodec/mpegaudiodec_template.c (mp_decode_layer3) |
 | `layer3`: MPEG-1 scalefactor widths, order and scfsi groups | Sieler and Sperschneider, Tables 15 and 16 and section 4.2.4 (main_data) |
 | `layer3`: scalefactors kept in the order sent, with scfsi reusing their places | FFmpeg, libavcodec/mpegaudiodec_template.c (mp_decode_layer3). mpg123, src/libmpg123/layer3.c (III_get_scale_factors_1) |
+| `layer3`: scalefactor band edges | Sieler and Sperschneider, Tables 42 to 59. FFmpeg, libavcodec/mpegaudiodec_common.c (ff_band_size_long and ff_band_size_short) and mpg123, src/libmpg123/l3bandgain.h (bandInfo) agree |
+| `layer3`: big_values regions and the implicit regions of granules with window switching | Sieler and Sperschneider, section 4.2.4 (region0_count and region1_count). FFmpeg, libavcodec/mpegaudiodec_template.c (init_short_region and init_long_region) |
+| `layer3`: spectrum decoding order and its end | Sieler and Sperschneider, section 4.3.8 (Huffman decoding). FFmpeg, libavcodec/mpegaudiodec_template.c (huffman_decode) |
 
 No part adapts another decoder's code. The Huffman code tables are data transcribed from FFmpeg.

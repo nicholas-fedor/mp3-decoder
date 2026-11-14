@@ -12,20 +12,38 @@ const escape = 15
 //
 // Each pair is a code word of the region's table, then the linbits and the sign of x, then those
 // of y. The unused tables 4 and 14 decode as table 0, whose pairs are zeros coded in no bits.
+// Decoding stops when dst is full or at the end of the granule's Huffman data, and a pair that
+// starts before the end is decoded whole. Pairs coded in no bits never reach the end, so table 0
+// fills dst.
 //
 // Parameters:
 //   - stream: the bitstream, at the region's first code word.
 //   - table: the table number that table_select gives, from 0 to 31.
 //   - dst: where the values go, two for each pair.
-func BigValues(stream *bits.Reader, table int, dst []int) {
+//   - end: the position of the bit after the granule's Huffman data.
+//
+// Returns:
+//   - int: the number of values decoded, a multiple of 2.
+func BigValues(stream *bits.Reader, table int, dst []int, end int) int {
 	ref := bigValueLookups[table]
 
-	for at := 0; at+1 < len(dst); at += 2 {
+	if ref.root == 0 {
+		decoded := len(dst) &^ 1
+		clear(dst[:decoded])
+
+		return decoded
+	}
+
+	decoded := 0
+
+	for ; decoded+1 < len(dst) && stream.Pos() < end; decoded += 2 {
 		x, y := readCode(&lookupEntries, ref, stream)
 
-		dst[at] = signed(stream, extend(stream, x, ref.linbits))
-		dst[at+1] = signed(stream, extend(stream, y, ref.linbits))
+		dst[decoded] = signed(stream, extend(stream, x, ref.linbits))
+		dst[decoded+1] = signed(stream, extend(stream, y, ref.linbits))
 	}
+
+	return decoded
 }
 
 // extend adds a magnitude's linbits.

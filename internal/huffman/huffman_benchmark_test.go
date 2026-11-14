@@ -45,7 +45,7 @@ func BenchmarkBigValues(b *testing.B) {
 				r.Reset(data, 0)
 
 				for r.Pos() < len(data)*8-granuleLines*maxPairBits {
-					BigValues(&r, table, values)
+					BigValues(&r, table, values, len(data)*8)
 
 					pairs += granuleLines / 2
 				}

@@ -25,17 +25,18 @@ const (
 	maxQuadBits = 6 + quadruple
 )
 
-// FuzzBigValues decodes pairs from any bits in any table and checks that each value lies within
-// the table's range and that the reader moves no further than the pairs can take.
+// FuzzBigValues decodes pairs from any bits in any table to any end and checks that each value lies
+// within the table's range, that the reader moves no further than the pairs can take, and that it
+// stops within one pair past the end.
 //
 // The seed corpus holds no bits, ones in table 1 and random-looking bits in tables 13 and 24.
 func FuzzBigValues(f *testing.F) {
-	f.Add([]byte{}, uint8(0), uint8(4))
-	f.Add([]byte{0xff, 0xff}, uint8(1), uint8(8))
-	f.Add([]byte{0x93, 0x5a, 0x17, 0xc4, 0x00, 0x81}, uint8(13), uint8(10))
-	f.Add([]byte{0x00, 0x00, 0x00, 0x7f, 0xff, 0x12}, uint8(24), uint8(10))
+	f.Add([]byte{}, uint8(0), uint8(4), uint16(0))
+	f.Add([]byte{0xff, 0xff}, uint8(1), uint8(8), uint16(16))
+	f.Add([]byte{0x93, 0x5a, 0x17, 0xc4, 0x00, 0x81}, uint8(13), uint8(10), uint16(30))
+	f.Add([]byte{0x00, 0x00, 0x00, 0x7f, 0xff, 0x12}, uint8(24), uint8(10), uint16(48))
 
-	f.Fuzz(func(t *testing.T, data []byte, number, pairs uint8) {
+	f.Fuzz(func(t *testing.T, data []byte, number, pairs uint8, end uint16) {
 		table := int(number) % codebook.BigValueTables
 		limit := 0
 
@@ -51,13 +52,22 @@ func FuzzBigValues(f *testing.F) {
 		r.Reset(data, 0)
 
 		values := make([]int, int(pairs)%64*2)
-		BigValues(&r, table, values)
+		decoded := BigValues(&r, table, values, int(end))
 
-		for _, value := range values {
+		require.Zero(t, decoded%2)
+		require.LessOrEqual(t, decoded, len(values))
+
+		for _, value := range values[:decoded] {
 			require.LessOrEqual(t, max(value, -value), limit, "table %d", table)
 		}
 
-		assert.LessOrEqual(t, r.Pos(), len(values)/2*maxPairBits)
+		assert.LessOrEqual(t, r.Pos(), decoded/2*maxPairBits)
+
+		if decoded < len(values) {
+			assert.GreaterOrEqual(t, r.Pos(), int(end))
+		}
+
+		assert.Less(t, r.Pos(), max(int(end), 0)+maxPairBits)
 	})
 }
 

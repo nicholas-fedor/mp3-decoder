@@ -5,11 +5,13 @@ package layer3
 
 import (
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/nicholas-fedor/mp3-decoder/frame"
+	"github.com/nicholas-fedor/mp3-decoder/internal/bits"
 )
 
 // BenchmarkMainData measures handing out the main data of each frame of a 128 kbit/s joint stereo
@@ -47,4 +49,67 @@ func BenchmarkMainData(b *testing.B) {
 	}
 
 	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N*len(owns)), "ns/frame")
+}
+
+// BenchmarkSpectrum measures reading the scalefactors and decoding the spectral values of each
+// channel's granule of a 128 kbit/s joint stereo file that LAME encoded.
+func BenchmarkSpectrum(b *testing.B) {
+	data, err := os.ReadFile("testdata/mpeg1-joint.mp3")
+	require.NoError(b, err)
+
+	type framed struct {
+		main []byte
+		side SideInfo
+		head frame.Header
+	}
+
+	var (
+		frames    []framed
+		reservoir Reservoir
+	)
+
+	for at := 0; at < len(data); {
+		head, ok := frame.Parse(data[at:])
+		require.True(b, ok)
+
+		end := at + head.Size()
+
+		var side SideInfo
+
+		require.NoError(b, side.Parse(head, data[at:end]))
+
+		main, _ := reservoir.MainData(side.MainDataBegin, data[at+head.DataAt():end])
+		frames = append(frames, framed{main: slices.Clone(main), side: side, head: head})
+		at = end
+	}
+
+	var (
+		stream   bits.Reader
+		factors  [2]Scalefactors
+		spectrum Spectrum
+	)
+
+	granules := 0
+
+	for b.Loop() {
+		for at := range frames {
+			f := &frames[at]
+			start := 0
+
+			for gr := range 2 {
+				for ch := range f.head.Channels() {
+					info := &f.side.Granules[gr][ch]
+
+					stream.Reset(f.main, start)
+					factors[ch].ReadMPEG1(&stream, &f.side, gr, ch)
+					spectrum.Read(&stream, f.head, info, start+info.Part23Length)
+
+					start += info.Part23Length
+					granules++
+				}
+			}
+		}
+	}
+
+	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(granules), "ns/granule")
 }

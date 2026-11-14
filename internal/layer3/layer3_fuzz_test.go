@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nicholas-fedor/mp3-decoder/frame"
+	"github.com/nicholas-fedor/mp3-decoder/internal/bits"
 )
 
 // FuzzSideInfo parses side information from any bytes under any Layer III header and checks that
@@ -145,5 +146,60 @@ func FuzzReservoir(f *testing.F) {
 
 			history = append(history, kept...)
 		}
+	})
+}
+
+// FuzzSpectrum decodes spectral values from any bits under any side information and checks that
+// whole pairs and quadruples come back, that every value past them is 0 and within the widest
+// table's range, and that decoding stops with room for another quadruple only at or just past the
+// end.
+//
+// A pair runs at most 47 bits past the end, a 19-bit code word with 13 linbits and a sign for each
+// value. The seed corpus holds ones under long, short and mixed blocks, and no bits.
+func FuzzSpectrum(f *testing.F) {
+	f.Add([]byte{0xff, 0xff, 0xff, 0xff}, []byte{0, 100, 1, 13, 24, 3, 2, 0, 0, 0, 0}, uint16(32))
+	f.Add([]byte{0x93, 0x5a, 0x17, 0xc4, 0x00, 0x81}, []byte{1, 32, 7, 16, 0, 0, 0, 2, 1, 1, 4}, uint16(48))
+	f.Add([]byte{0x00, 0x12, 0x7f}, []byte{1, 31, 2, 31, 0, 0, 0, 2, 0, 0, 8}, uint16(24))
+	f.Add([]byte{}, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, uint16(0))
+
+	f.Fuzz(func(t *testing.T, data, fields []byte, end uint16) {
+		if len(fields) < 11 {
+			return
+		}
+
+		info := GranuleInfo{
+			TableSelect:       [3]int{int(fields[2] % 32), int(fields[3] % 32), int(fields[4] % 32)},
+			BigValues:         (int(fields[0])<<8 | int(fields[1])) % (maxBigValues + 1),
+			Region0Count:      int(fields[5] % 16),
+			Region1Count:      int(fields[6] % 8),
+			Count1TableSelect: int(fields[8] % 2),
+			BlockType:         blockTypes[fields[7]%4],
+			MixedBlock:        fields[9]%2 == 1,
+		}
+
+		var (
+			stream   bits.Reader
+			spectrum Spectrum
+		)
+
+		stream.Reset(data, 0)
+		spectrum.Read(&stream, frame.Header{SampleRate: bandTables[int(fields[10])%len(bandTables)].rate}, &info, int(end))
+
+		require.Zero(t, spectrum.Decoded%2)
+		require.LessOrEqual(t, spectrum.Decoded, granuleLines)
+
+		for at, value := range spectrum.Values {
+			if at >= spectrum.Decoded {
+				require.Zero(t, value, "line %d", at)
+			}
+
+			require.LessOrEqual(t, max(value, -value), 15+1<<13-1, "line %d", at)
+		}
+
+		if spectrum.Decoded+4 <= granuleLines {
+			assert.GreaterOrEqual(t, stream.Pos(), int(end))
+		}
+
+		assert.Less(t, stream.Pos(), int(end)+47)
 	})
 }
