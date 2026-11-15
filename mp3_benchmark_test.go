@@ -23,6 +23,8 @@ func BenchmarkRead(b *testing.B) {
 	buffer := make([][2]float64, 4096)
 	samples := 0
 
+	b.ReportAllocs()
+
 	for b.Loop() {
 		decoder, err := mp3.OpenStream(b.Context(), bytes.NewReader(data))
 		require.NoError(b, err)
@@ -38,4 +40,32 @@ func BenchmarkRead(b *testing.B) {
 	}
 
 	b.ReportMetric(float64(samples)/44100/b.Elapsed().Seconds(), "x-realtime")
+}
+
+// BenchmarkSeek measures seeking a file opened from memory to samples spread over it, then reading
+// the frame at each. The file is a 128 kbit/s joint stereo fixture joined to three copies of
+// itself, which the walk in Open indexes.
+func BenchmarkSeek(b *testing.B) {
+	data, err := os.ReadFile("testdata/mpeg1-joint.mp3")
+	require.NoError(b, err)
+
+	decoder, err := mp3.Open(b.Context(), bytes.NewReader(bytes.Repeat(data, 4)))
+	require.NoError(b, err)
+
+	length, _ := decoder.Len()
+	buffer := make([][2]float64, 1152)
+	sample := int64(0)
+
+	b.ReportAllocs()
+
+	for b.Loop() {
+		sample = (sample + 30011) % (length - int64(len(buffer)))
+
+		err = decoder.Seek(b.Context(), sample)
+		if err == nil {
+			_, err = decoder.Read(buffer)
+		}
+	}
+
+	require.NoError(b, err)
 }

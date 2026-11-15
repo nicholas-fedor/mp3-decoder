@@ -260,3 +260,33 @@ func readReference(t *testing.T, name string, samples int) conformance.Waveform 
 
 	return wave
 }
+
+// TestAllocations checks that reading and seeking allocate nothing once the decoder has started.
+//
+// It runs alone, since allocations are counted across the whole program.
+func TestAllocations(t *testing.T) {
+	data, err := os.ReadFile("testdata/mpeg1-joint.mp3")
+	require.NoError(t, err)
+
+	decoder, err := mp3.Open(t.Context(), bytes.NewReader(slices.Concat(data, data, data, data)))
+	require.NoError(t, err)
+
+	buffer := make([][2]float64, frame.MaxSamples)
+
+	_, err = decoder.Read(buffer)
+	require.NoError(t, err)
+
+	reads := testing.AllocsPerRun(20, func() {
+		_, err = decoder.Read(buffer)
+	})
+	require.NoError(t, err)
+	assert.Zero(t, reads, "allocations per Read")
+
+	sample := int64(0)
+	seeks := testing.AllocsPerRun(20, func() {
+		sample = (sample + 30011) % 80000
+		err = decoder.Seek(t.Context(), sample)
+	})
+	require.NoError(t, err)
+	assert.Zero(t, seeks, "allocations per Seek")
+}

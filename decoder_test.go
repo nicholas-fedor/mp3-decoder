@@ -306,6 +306,7 @@ func TestReadEnds(t *testing.T) {
 		require.ErrorIs(t, err, io.EOF)
 		require.Len(t, got, 3*frame.MaxSamples)
 		assert.Equal(t, make([][2]float64, frame.MaxSamples), got[:frame.MaxSamples])
+		assert.Equal(t, Stats{Frames: 5, Resyncs: 0, CRCMismatches: 0, Underflows: 0, Undecodable: 1}, decoder.Stats())
 	})
 
 	t.Run("MPEG-2 frames", func(t *testing.T) {

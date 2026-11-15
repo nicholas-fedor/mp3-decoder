@@ -34,7 +34,7 @@ func TestDecodeEncodedFiles(t *testing.T) {
 
 			for at, data := range encodedFrames(t, name) {
 				head, _ := frame.Parse(data)
-				require.NoError(t, decoder.Decode(pcm, head, data), "frame %d", at)
+				decode(t, &decoder, pcm, head, data)
 
 				for sample, pair := range pcm {
 					for _, value := range pair {
@@ -72,14 +72,14 @@ func TestDecodeJoined(t *testing.T) {
 	pcm := make([][2]float64, frame.MaxSamples)
 	head, _ := frame.Parse(frames[join])
 
-	require.NoError(t, decoder.Decode(pcm, head, frames[join]))
+	assert.False(t, decode(t, &decoder, pcm, head, frames[join]), "the joined frame's main data is all there")
 	assert.True(t, slices.Equal(make([][2]float64, frame.MaxSamples), pcm), "the joined frame sounds")
 
 	sounds := false
 
 	for _, data := range frames[join+1 : join+8] {
 		head, _ = frame.Parse(data)
-		require.NoError(t, decoder.Decode(pcm, head, data))
+		decode(t, &decoder, pcm, head, data)
 
 		sounds = sounds || !slices.Equal(make([][2]float64, frame.MaxSamples), pcm)
 	}
@@ -110,8 +110,8 @@ func TestDecodeResync(t *testing.T) {
 		}
 
 		head, _ := frame.Parse(data)
-		require.NoError(t, resynced.Decode(got, head, data))
-		require.NoError(t, steady.Decode(want, head, data))
+		decode(t, &resynced, got, head, data)
+		decode(t, &steady, want, head, data)
 
 		if at == join {
 			assert.NotEqual(t, want, got, "the frame after the resync decodes as without it")
@@ -144,7 +144,7 @@ func TestDecodePreroll(t *testing.T) {
 
 			for at, data := range frames {
 				head, _ := frame.Parse(data)
-				require.NoError(t, steady.Decode(whole[at*samples:], head, data))
+				decode(t, &steady, whole[at*samples:], head, data)
 			}
 
 			got := make([][2]float64, samples)
@@ -154,7 +154,7 @@ func TestDecodePreroll(t *testing.T) {
 
 				for _, data := range frames[max(target-preroll, 0) : target+1] {
 					head, _ := frame.Parse(data)
-					require.NoError(t, started.Decode(got, head, data))
+					decode(t, &started, got, head, data)
 				}
 
 				if !slices.Equal(whole[target*samples:(target+1)*samples], got) {
@@ -184,13 +184,13 @@ func TestDecodeChannelChange(t *testing.T) {
 
 			for _, data := range encodedFrames(t, files[0])[:3] {
 				head, _ := frame.Parse(data)
-				require.NoError(t, changed.Decode(got, head, data))
+				decode(t, &changed, got, head, data)
 			}
 
 			for at, data := range encodedFrames(t, files[1])[:4] {
 				head, _ := frame.Parse(data)
-				require.NoError(t, changed.Decode(got, head, data))
-				require.NoError(t, fresh.Decode(want, head, data))
+				decode(t, &changed, got, head, data)
+				decode(t, &fresh, want, head, data)
 				assert.True(t, slices.Equal(want, got), "frame %d", at)
 			}
 		})
@@ -221,7 +221,8 @@ func TestDecodeErrors(t *testing.T) {
 
 		var decoder layer3.Decoder
 
-		require.ErrorIs(t, decoder.Decode(pcm, head, data), tt.want, tt.name)
+		_, err := decoder.Decode(pcm, head, data)
+		require.ErrorIs(t, err, tt.want, tt.name)
 		assert.Equal(t, [2]float64{0.5, -0.5}, pcm[7], tt.name)
 	}
 
@@ -229,7 +230,8 @@ func TestDecodeErrors(t *testing.T) {
 
 	var decoder layer3.Decoder
 
-	require.ErrorIs(t, decoder.Decode(make([][2]float64, frame.MaxSamples), head, data[:20]), layer3.ErrShortFrame)
+	_, err := decoder.Decode(make([][2]float64, frame.MaxSamples), head, data[:20])
+	require.ErrorIs(t, err, layer3.ErrShortFrame)
 }
 
 // reachingBack returns the first frame after the first two whose main data begins in the frames
@@ -251,4 +253,14 @@ func reachingBack(t *testing.T, frames [][]byte) int {
 	require.Fail(t, "no frame's main data begins earlier")
 
 	return 0
+}
+
+// decode decodes a frame that must decode, and reports whether its main data was all there.
+func decode(tb testing.TB, decoder *layer3.Decoder, pcm [][2]float64, head frame.Header, data []byte) bool {
+	tb.Helper()
+
+	whole, err := decoder.Decode(pcm, head, data)
+	require.NoError(tb, err)
+
+	return whole
 }

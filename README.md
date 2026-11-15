@@ -37,7 +37,7 @@ for {
 }
 ```
 
-Samples come as left and right pairs, unclipped, with full scale at 1. For a file, `mp3.Open` takes an `io.ReadSeeker` and also reports the number of samples through `Len`. It seeks to any sample through `Seek`, and `Position` reports the sample `Read` gives next.
+Samples come as left and right pairs, unclipped, with full scale at 1. For a file, `mp3.Open` takes an `io.ReadSeeker` and also reports the number of samples through `Len`. It seeks to any sample through `Seek`, and `Position` reports the sample `Read` gives next. `Stats` counts the damage decoding carried on past.
 
 ## Packages
 

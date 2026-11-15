@@ -62,6 +62,7 @@ This document explains how the decoder is built and why, part by part. Each sect
   - [End of a Stream](#end-of-a-stream)
   - [Gapless Playback](#gapless-playback)
   - [Seeking](#seeking)
+  - [Damage Counts](#damage-counts)
   - [Accuracy](#accuracy)
 - [Performance](#performance)
 
@@ -463,6 +464,20 @@ The bound needs no side information, so the frame to start from follows from fra
 
 Frames are found through an index of where the search for each one starts, as mpg123 indexes them. It holds up to 1,024 entries. When it fills, it drops every other entry and doubles its step. The walk in `mp3.Open` fills it, and so does decoding. A seek past the frames indexed walks on from the last entry. A stream that `mp3.OpenStream` opened cannot seek.
 
+### Damage Counts
+
+Damage never ends a stream, and `Stats` counts how often decoding carried on past each kind of it:
+
+| Count | What it counts | What the frame gives |
+| --- | --- | --- |
+| `Frames` | Frames decoded | Its samples |
+| `Resyncs` | Passes over bytes that are not a frame of the stream | The frames after it, as [Tags and Damage Between Frames](#tags-and-damage-between-frames) describes |
+| `CRCMismatches` | Frames whose CRC does not match | Its samples, decoded all the same |
+| `Underflows` | Frames whose main data begins before the bytes the reservoir holds | Silence, as [Missing Main Data](#missing-main-data) describes |
+| `Undecodable` | Frames whose side information holds a value no encoder writes | Silence |
+
+The CRC of a Layer III frame covers the last two bytes of its header and its side information. A frame whose CRC does not match is decoded anyway, as FFmpeg and mpg123 decode it. mpg123 never checks the CRC. FFmpeg checks it only when its `err_detect` option asks, and then only logs a mismatch unless `explode` is set too. Every frame of the fixture LAME encoded with CRCs passes, and a damaged CRC changes no sample. The frames a seek decodes before its sample are not counted, since the first of them give silence by design.
+
 ### Accuracy
 
 The MPEG-1 fixtures decode against the 32-bit float output of mpg123 1.33.7 and FFmpeg n9.0.2, with neither leaving out the encoder delay:
@@ -480,7 +495,7 @@ The ISO conformance streams are measured against their 24-bit references, as [Co
 
 ## Performance
 
-Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates.
+Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates, and `TestAllocations` checks that `Read` and `Seek` allocate nothing once a stream has started.
 
 | Stage | Input | Time |
 | --- | --- | --- |
@@ -492,4 +507,6 @@ Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates.
 | Reordering | A granule of short blocks | About 310 ns |
 | Hybrid filterbank, with the direct IMDCT | Random lines | About 5.9 µs a granule of long blocks, and 3.8 µs of short blocks |
 | Polyphase synthesis, with direct matrixing | Random subband samples | About 19 µs a granule of one channel |
-| Opening and decoding a whole stream | A 128 kbit/s LAME joint stereo file | About 245 times faster than real time |
+| A frame through every stage | A 128 kbit/s LAME joint stereo file | About 82 µs a frame |
+| Opening and decoding a whole stream | A 128 kbit/s LAME joint stereo file | About 283 times faster than real time |
+| A seek, then reading the frame there | A 128 kbit/s LAME joint stereo file, indexed | About 870 µs, mostly the 9 frames decoded before the sample |

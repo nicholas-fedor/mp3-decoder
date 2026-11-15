@@ -61,11 +61,12 @@ const (
 //   - data: the frame's bytes from its header to its end.
 //
 // Returns:
+//   - bool: whether the decoder held all of the frame's main data, without which it gives silence.
 //   - error: [ErrShortFrame] or [ErrBlockType], and then dst is left as it was.
-func (d *Decoder) Decode(dst [][2]float64, head frame.Header, data []byte) error {
+func (d *Decoder) Decode(dst [][2]float64, head frame.Header, data []byte) (bool, error) {
 	err := d.side.Parse(head, data)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	d.followChannels(head)
@@ -85,7 +86,7 @@ func (d *Decoder) Decode(dst [][2]float64, head frame.Header, data []byte) error
 		}
 	}
 
-	return nil
+	return missing == 0, nil
 }
 
 // Reset readies the decoder for a stream from its start, with an empty bit reservoir and

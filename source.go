@@ -15,6 +15,8 @@ type source struct {
 	reader io.Reader
 	// file is the file the stream is read from, or nil for a stream that cannot seek.
 	file io.ReadSeeker
+	// limit reads file up to where the stream ends, after a seek.
+	limit io.LimitedReader
 	// buffer holds the bytes read, of which those from at on are unused.
 	buffer []byte
 	// at is the first unused byte in buffer.
@@ -123,7 +125,8 @@ func (s *source) seek(offset int64) error {
 		return fmt.Errorf("seek stream: %w", err)
 	}
 
-	s.reader = io.LimitReader(s.file, s.end-offset)
+	s.limit = io.LimitedReader{R: s.file, N: s.end - offset}
+	s.reader = &s.limit
 	s.buffer, s.at, s.passed, s.ended = s.buffer[:0], 0, offset, false
 
 	return nil

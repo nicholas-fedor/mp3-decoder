@@ -27,6 +27,8 @@ type Decoder struct {
 	pcm [frame.MaxSamples][2]float64
 	// cut holds a last frame that the stream ends inside, with zeros for the bytes it lacks.
 	cut [frame.MaxSize]byte
+	// stats counts what decoding has met.
+	stats Stats
 	// padding holds the samples the encoder added, which are left out.
 	padding encoderPadding
 	// length is the number of samples the stream decodes to, when known.
@@ -35,8 +37,31 @@ type Decoder struct {
 	known bool
 }
 
-// tailSize is the most bytes at the end of a file searched for the tags after its audio.
-const tailSize = 64 << 10
+// Stats counts what decoding a stream has met.
+//
+// Damage never ends a stream. Each count says how often decoding carried on past one kind of it.
+type Stats struct {
+	// Frames is the number of frames decoded.
+	Frames int64
+	// Resyncs is the number of times bytes that are not a frame of the stream were passed over.
+	Resyncs int64
+	// CRCMismatches is the number of frames whose CRC does not match. They are decoded all the same.
+	CRCMismatches int64
+	// Underflows is the number of frames whose main data began before the bytes the decoder held,
+	// which give silence.
+	Underflows int64
+	// Undecodable is the number of frames whose side information holds a value no encoder writes,
+	// which give silence.
+	Undecodable int64
+}
+
+// Decoding sizes.
+const (
+	// tailSize is the most bytes at the end of a file searched for the tags after its audio.
+	tailSize = 64 << 10
+	// byteBits is the number of bits in a byte.
+	byteBits = 8
+)
 
 // Errors from opening a stream.
 var (
@@ -244,7 +269,13 @@ func (d *Decoder) Seek(ctx context.Context, sample int64) error {
 
 	d.pending = nil
 
+	counted := d.stats
+
 	for d.scanner.frames*samples <= target {
+		if d.scanner.frames == target/samples {
+			d.stats = counted
+		}
+
 		err = d.decodeFrame()
 		if errors.Is(err, io.EOF) {
 			break
@@ -262,6 +293,16 @@ func (d *Decoder) Seek(ctx context.Context, sample int64) error {
 	return nil
 }
 
+// Stats returns the counts of what decoding has met since the stream was opened.
+//
+// The frames a seek decodes before its sample are not counted.
+//
+// Returns:
+//   - Stats: the counts.
+func (d *Decoder) Stats() Stats {
+	return d.stats
+}
+
 // decodeFrame decodes the next frame into pcm and hands its samples to pending.
 //
 // Returns:
@@ -272,8 +313,15 @@ func (d *Decoder) decodeFrame() error {
 		return err
 	}
 
+	d.stats.Frames++
+
 	if resynced {
+		d.stats.Resyncs++
 		d.layer3.Resync()
+	}
+
+	if !head.CheckCRC(data, byteBits*head.SideInfoSize()) {
+		d.stats.CRCMismatches++
 	}
 
 	if len(data) < head.Size() {
@@ -284,10 +332,17 @@ func (d *Decoder) decodeFrame() error {
 		data = cut
 	}
 
-	err = d.layer3.Decode(d.pcm[:], head, data)
-	if err != nil {
+	whole, err := d.layer3.Decode(d.pcm[:], head, data)
+
+	switch {
+	case err != nil:
 		// The frame gives silence, so the frames after it keep their samples' numbers.
 		clear(d.pcm[:head.Samples()])
+
+		d.stats.Undecodable++
+	case !whole:
+		d.stats.Underflows++
+	default:
 	}
 
 	from, to := d.padding.keep((d.scanner.frames-1)*int64(head.Samples()), head.Samples())

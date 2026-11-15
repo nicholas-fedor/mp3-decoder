@@ -257,3 +257,39 @@ func BenchmarkReorder(b *testing.B) {
 		Reorder(head, &lines, &info)
 	}
 }
+
+// BenchmarkDecode measures decoding each frame of a 128 kbit/s joint stereo file that LAME
+// encoded through every stage, from its bytes to its PCM samples.
+func BenchmarkDecode(b *testing.B) {
+	data, err := os.ReadFile("../../testdata/mpeg1-joint.mp3")
+	require.NoError(b, err)
+
+	var (
+		frames  [][]byte
+		headers []frame.Header
+	)
+
+	for at := 0; at < len(data); {
+		head, ok := frame.Parse(data[at:])
+		require.True(b, ok)
+
+		frames = append(frames, data[at:at+head.Size()])
+		headers = append(headers, head)
+		at += head.Size()
+	}
+
+	var decoder Decoder
+
+	pcm := make([][2]float64, frame.MaxSamples)
+
+	b.ReportAllocs()
+
+	for b.Loop() {
+		for i, data := range frames {
+			_, err = decoder.Decode(pcm, headers[i], data)
+		}
+	}
+
+	require.NoError(b, err)
+	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N*len(frames)), "ns/frame")
+}
