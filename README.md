@@ -28,6 +28,18 @@ It also does the following:
 
 ## Usage
 
+### Adding the Module
+
+```sh
+go get github.com/nicholas-fedor/mp3-decoder
+```
+
+The package at the module's root is named `mp3`, so an import gives it that name.
+
+```go
+import "github.com/nicholas-fedor/mp3-decoder"
+```
+
 ### Decoding a Stream
 
 `mp3.OpenStream` takes any `io.Reader`, such as a network stream. `Read` fills a buffer with samples and returns `io.EOF`, unwrapped, after the last one.
