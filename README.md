@@ -99,8 +99,6 @@ if err != nil {
 
 ## Packages
 
-### Public Packages
-
 | Package | What it holds |
 | --- | --- |
 | mp3, this directory | `Open`, `OpenStream` and the `Decoder`, which reads, seeks and counts damage |
@@ -116,50 +114,9 @@ The leaf packages read a stream's structure without decoding its audio. A progra
 - **Seeking by bytes:** `Info.OffsetAt` turns a share of the stream into a byte offset through the tag's seek table, and `Header.Preroll` says how many frames before it a decoder must start to decode exactly.
 - **Finding the audio:** `container.TagSize` and `container.TrailerSize` give the sizes of the tags before and after it.
 
-### Internal Packages
+## Contributing
 
-| Package | Role |
-| --- | --- |
-| [internal/bits](internal/bits) | Reads bitstreams bit by bit |
-| [internal/huffman](internal/huffman) | Decodes the Huffman-coded spectral values of a Layer III granule, with the code tables in `internal/huffman/codebook` |
-| [internal/layer3](internal/layer3) | Decodes the audio data of Layer III frames, as [Layer III Decoding](docs/design.md#layer-iii-decoding) describes |
-| [internal/hybrid](internal/hybrid) | Turns the spectral lines of a Layer III granule into polyphase subband samples |
-| [internal/layer12](internal/layer12) | Decodes the audio data of Layer I and Layer II frames, as [Layer I Decoding](docs/design.md#layer-i-decoding) and [Layer II Decoding](docs/design.md#layer-ii-decoding) describe |
-| [internal/synth](internal/synth) | Turns polyphase subband samples into PCM samples, for every layer |
-| [internal/trig](internal/trig) | Computes the exact sines and cosines of the generated tables, for their tests |
-| [internal/mp3test](internal/mp3test) | Builds bitstreams for tests |
-| [internal/conformance](internal/conformance) | Measures the decoder against ISO's conformance streams, with the command that fetches them in `internal/conformance/fetch` |
-
-## Testing
-
-Every package has white-box unit tests. The packages that decode or parse also have these:
-
-- A black-box integration test that uses only the package's exported API.
-- Fuzz targets.
-- Benchmarks for the stages on the decoding path.
-
-The public packages, mp3, [frame](frame) and [container](container), also have examples.
-
-### Test Bitstreams
-
-The internal package [mp3test](internal/mp3test) builds bitstreams for tests, from frame headers and tags to the audio data of each layer. It encodes from its own field definitions, so the parsers are not checked against themselves.
-
-### Fixtures
-
-The [testdata](testdata) directory holds real streams and what other decoders make of them. The tests of several packages read them.
-
-| Files | Contents |
-| --- | --- |
-| `*.mp3` | Layer III streams that LAME encoded |
-| `*.mp2` | Layer II streams that TwoLAME encoded |
-| `*.mpg123.f32`, `*.ffmpeg.f32` | The samples mpg123 and ffmpeg decode from the streams, as references |
-| `golden.txt` | The hash of the samples each stream decodes to, which must be the same on every machine |
-| `generate.sh` | The script that writes the streams and references |
-| `versions.txt` | The versions of the tools that wrote them |
-
-### Conformance
-
-The internal package [conformance](internal/conformance) measures the decoder against ISO's conformance streams. ISO's licence forbids passing the streams on, so `task test` fetches them into a cache first. [Conformance](docs/conformance.md) records the results.
+[CONTRIBUTING.md](CONTRIBUTING.md) explains how to work on the decoder and test it.
 
 ## Documentation
 
