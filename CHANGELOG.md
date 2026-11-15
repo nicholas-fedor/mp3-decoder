@@ -61,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix the golangci-lint config's schema errors by @nicholas-fedor
 - Read Xing, Info and VBRI tags only in Layer III frames by @nicholas-fedor
 - Skip stereo for a granule whose main data is missing by @nicholas-fedor
 - Find the frames after an unconfirmable header at a stream's end by @nicholas-fedor
@@ -68,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Tests
 
+- Skip the read-only cache test on Windows by @nicholas-fedor
 - Name the root package's examples for the package by @nicholas-fedor
 - Measure the Layer I and Layer II conformance streams by @nicholas-fedor
 - Prove the decoder decodes the same bits on every machine by @nicholas-fedor
@@ -75,8 +77,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New Contributors
 
-- @renovate[bot] made their first contribution in [#2](https://github.com/nicholas-fedor/mp3-decoder/pull/2)
 - @nicholas-fedor made their first contribution
+- @github-actions[bot] made their first contribution in [#4](https://github.com/nicholas-fedor/mp3-decoder/pull/4)
+- @renovate[bot] made their first contribution in [#2](https://github.com/nicholas-fedor/mp3-decoder/pull/2)
 
 ## Compare Releases
 
