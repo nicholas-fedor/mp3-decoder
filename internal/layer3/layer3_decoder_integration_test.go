@@ -197,6 +197,33 @@ func TestDecodeChannelChange(t *testing.T) {
 	}
 }
 
+// TestDecodeMissingAfterMixed checks that a joint stereo granule of short blocks whose main data
+// is missing gives silence after a granule of mixed blocks.
+//
+// The missing granule reads no scalefactors, so the right channel's still hold the mixed granule's.
+func TestDecodeMissingAfterMixed(t *testing.T) {
+	t.Parallel()
+
+	var mixed, short mp3test.SideInfo
+
+	mixed.Granules[0][1] = mp3test.Granule{WindowSwitching: true, BlockType: 2, MixedBlock: true}
+	short.MainDataBegin = 255
+	short.Granules[0][1] = mp3test.Granule{WindowSwitching: true, BlockType: 2}
+
+	first, firstHead := frameWith(t, mp3test.Header{Version: mp3test.MPEG2, Layer: mp3test.Layer3, Bitrate: 8}, &mixed)
+	second, secondHead := frameWith(t, mp3test.Header{
+		Version: mp3test.MPEG2, Layer: mp3test.Layer3, Bitrate: 8, Mode: mp3test.JointStereo, Extension: 1,
+	}, &short)
+
+	var decoder layer3.Decoder
+
+	pcm := make([][2]float64, frame.MaxSamples)
+
+	decode(t, &decoder, pcm, firstHead, first)
+	assert.False(t, decode(t, &decoder, pcm, secondHead, second))
+	assert.Equal(t, make([][2]float64, secondHead.Samples()), pcm[:secondHead.Samples()])
+}
+
 // TestDecodeErrors checks that a frame the decoder refuses leaves the samples as they were.
 func TestDecodeErrors(t *testing.T) {
 	t.Parallel()

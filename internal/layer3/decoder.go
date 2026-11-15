@@ -141,7 +141,9 @@ func (d *Decoder) granule(dst [][2]float64, main []byte, head frame.Header, gr, 
 		start += d.side.Granules[gr][ch].Part23Length
 	}
 
-	if head.Mode != frame.Mono {
+	// A silenced granule reads no scalefactors, so it has no intensity positions, and its lines stay 0
+	// whatever stereo would do.
+	if head.Mode != frame.Mono && missing == 0 {
 		Stereo(head, &d.lines[0], &d.lines[1], &d.side.Granules[gr][1], &d.factors[1])
 	}
 
