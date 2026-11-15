@@ -49,12 +49,14 @@ var publishedAlias = [aliasButterflies]string{"-0.6", "-0.535", "-0.33", "-0.185
 
 // blocks holds a block of each kind.
 var blocks = []Block{
-	{Long: Subbands, Window: Normal},
-	{Long: Subbands, Window: Start},
-	{Long: Subbands, Window: Stop},
-	{Long: 0},
-	{Long: 2, Window: Normal},
-	{Long: 4, Window: Normal},
+	{Long: Subbands, Mixed: 0, Window: Normal},
+	{Long: Subbands, Mixed: 0, Window: Start},
+	{Long: Subbands, Mixed: 0, Window: Stop},
+	{Long: 0, Mixed: 0, Window: Normal},
+	{Long: 2, Mixed: 2, Window: Normal},
+	{Long: 4, Mixed: 4, Window: Normal},
+	{Long: Subbands, Mixed: 2, Window: Start},
+	{Long: Subbands, Mixed: 2, Window: Stop},
 }
 
 // TestHybridTables checks that the generated tables hold their closed forms rounded to the nearest
@@ -197,7 +199,12 @@ func transformOracle(overlap *[Subbands][Samples]float64, lines [granuleLines]fl
 					z[i] += in[k] * math.Cos(math.Pi/72*float64((2*i+19)*(2*k+1)%144))
 				}
 
-				z[i] *= windowOracle(block.Window, i)
+				window := block.Window
+				if subband < block.Mixed {
+					window = Normal
+				}
+
+				z[i] *= windowOracle(window, i)
 			}
 		} else {
 			for window := range 3 {

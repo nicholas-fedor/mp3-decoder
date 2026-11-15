@@ -22,8 +22,10 @@ import (
 func TestRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	long := func(window hybrid.Window) hybrid.Block { return hybrid.Block{Long: hybrid.Subbands, Window: window} }
-	short := hybrid.Block{Long: 0}
+	long := func(window hybrid.Window) hybrid.Block {
+		return hybrid.Block{Long: hybrid.Subbands, Mixed: 0, Window: window}
+	}
+	short := hybrid.Block{Long: 0, Mixed: 0, Window: hybrid.Normal}
 	run := []hybrid.Block{
 		long(hybrid.Normal), long(hybrid.Normal), long(hybrid.Start), short, short, long(hybrid.Stop),
 		long(hybrid.Normal), long(hybrid.Start), short, long(hybrid.Stop), long(hybrid.Normal), long(hybrid.Normal),

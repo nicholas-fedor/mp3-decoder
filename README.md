@@ -11,7 +11,7 @@ A pure-Go MPEG audio decoder for MPEG-1, MPEG-2 and MPEG-2.5 audio in Layers I, 
 
 ## Status
 
-The decoder plays streams of MPEG-1 Layer III frames, and matches mpg123 to the precision of its 32-bit float output. [Conformance](docs/conformance.md) records how each ISO conformance stream decodes. MPEG-2, MPEG-2.5, Layers I and II, seeking and gapless playback are in development.
+The decoder plays streams of MPEG-1 Layer III frames, and decodes every MPEG-1 Layer III stream of ISO's conformance package at full accuracy, as [Conformance](docs/conformance.md) records. MPEG-2, MPEG-2.5, Layers I and II, seeking and gapless playback are in development.
 
 ## Usage
 

@@ -123,7 +123,8 @@ func TestReadEnds(t *testing.T) {
 		samples int
 	}{
 		{"an ID3v1 trailer", slices.Concat(frames(stereoHead, 3), mp3test.ID3v1()), 3 * frame.MaxSamples},
-		{"a truncated frame", slices.Concat(frames(stereoHead, 3), frames(stereoHead, 1)[:200]), 3 * frame.MaxSamples},
+		{"a frame cut short", slices.Concat(frames(stereoHead, 3), frames(stereoHead, 1)[:200]), 4 * frame.MaxSamples},
+		{"a frame cut in its side information", slices.Concat(frames(stereoHead, 3), frames(stereoHead, 1)[:35]), 3 * frame.MaxSamples},
 		{"another stream", slices.Concat(frames(stereoHead, 3), frames(lsfHead, 3)), 3 * frame.MaxSamples},
 	}
 

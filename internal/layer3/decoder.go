@@ -35,6 +35,8 @@ type Decoder struct {
 	side SideInfo
 	// factors holds each channel's scalefactors.
 	factors [2]Scalefactors
+	// channels is the number of channels of the frame decoded last, or 0 before the first.
+	channels int
 }
 
 // granulePCM is the number of PCM samples a granule gives for each channel.
@@ -46,10 +48,13 @@ var ErrVersion = errors.New("layer3: only MPEG-1 frames are decoded")
 
 // Decode decodes the audio of one frame.
 //
-// The frame's main data may begin in the main data of the frames before it. A granule whose main
-// data begins before the bytes the decoder holds, as after joining a stream midway, gives silence,
-// but the filterbanks still run, so the granules after it carry on smoothly. A mono frame gives
-// each sample to both channels. The samples are not clipped.
+// The frame's main data may begin in the main data of the frames before it. A frame whose main
+// data begins before the bytes the decoder holds, as after joining a stream midway, gives silence
+// in both granules, but its main data still enters the bit reservoir and the filterbanks still
+// run, so the frames after it carry on smoothly. A frame with another number of channels than the
+// frame before it starts both channels' filterbanks afresh, as a new stream would, while the bit
+// reservoir carries on. A mono frame gives each sample to both channels. The samples are not
+// clipped.
 //
 // Parameters:
 //   - dst: the PCM samples as left and right pairs, at least as many as the frame holds.
@@ -68,12 +73,18 @@ func (d *Decoder) Decode(dst [][2]float64, head frame.Header, data []byte) error
 		return err
 	}
 
+	d.followChannels(head)
+
 	main, missing := d.reservoir.MainData(d.side.MainDataBegin, data[head.DataAt():])
-	start := -bitsPerByte * missing
+	start := 0
 
 	for gr := range mpeg1Granules {
 		for ch := range head.Channels() {
-			d.requantize(main, head, gr, ch, start)
+			if missing > 0 {
+				d.lines[ch] = [granuleLines]float64{}
+			} else {
+				d.requantize(main, head, gr, ch, start)
+			}
 
 			start += d.side.Granules[gr][ch].Part23Length
 		}
@@ -96,22 +107,31 @@ func (d *Decoder) Decode(dst [][2]float64, head frame.Header, data []byte) error
 	return nil
 }
 
-// requantize decodes one channel's granule into its spectral lines, or silence when its main data
-// begins before the bytes the decoder holds.
+// followChannels starts both channels' filterbanks afresh when a frame has another number of
+// channels than the frame before it, then records the frame's.
 //
 // Parameters:
-//   - main: the frame's main data, from the first byte the decoder holds.
+//   - head: the frame's header.
+func (d *Decoder) followChannels(head frame.Header) {
+	if d.channels != 0 && d.channels != head.Channels() {
+		for ch := range d.hybrid {
+			d.hybrid[ch].Reset()
+			d.synth[ch].Reset()
+		}
+	}
+
+	d.channels = head.Channels()
+}
+
+// requantize decodes one channel's granule into its spectral lines.
+//
+// Parameters:
+//   - main: the frame's main data.
 //   - head: the frame's header.
 //   - gr: the granule.
 //   - ch: the channel.
-//   - start: the position of the granule's first bit in main, below 0 when it is missing.
+//   - start: the position of the granule's first bit in main.
 func (d *Decoder) requantize(main []byte, head frame.Header, gr, ch, start int) {
-	if start < 0 {
-		d.lines[ch] = [granuleLines]float64{}
-
-		return
-	}
-
 	info := &d.side.Granules[gr][ch]
 
 	d.stream.Reset(main, start)
@@ -144,10 +164,11 @@ func (d *Decoder) synthesize(dst [][2]float64, head frame.Header, gr, ch int) {
 	}
 }
 
-// hybridBlock returns which subbands of a granule hold long blocks, and their window.
+// hybridBlock returns which subbands of a granule hold long blocks, and their windows.
 //
-// Mixed blocks hold long blocks up to where short band 3 starts, 2 subbands, or 4 at 8 kHz, and
-// they take the normal window.
+// The long part of a mixed block spans the subbands below where short band 3 starts, 2 subbands,
+// or 4 at 8 kHz, and takes the normal window. A start or stop block with the mixed flag set gives
+// those subbands the normal window too.
 //
 // Parameters:
 //   - info: the granule's side information.
@@ -156,16 +177,19 @@ func (d *Decoder) synthesize(dst [][2]float64, head frame.Header, gr, ch int) {
 // Returns:
 //   - hybrid.Block: the block.
 func hybridBlock(info *GranuleInfo, partition *bands) hybrid.Block {
-	switch {
-	case info.BlockType == StartBlock:
-		return hybrid.Block{Long: hybrid.Subbands, Window: hybrid.Start}
-	case info.BlockType == StopBlock:
-		return hybrid.Block{Long: hybrid.Subbands, Window: hybrid.Stop}
-	case info.BlockType != ShortBlocks:
-		return hybrid.Block{Long: hybrid.Subbands, Window: hybrid.Normal}
-	case info.MixedBlock:
-		return hybrid.Block{Long: partition.mixedEnd() / hybrid.Samples, Window: hybrid.Normal}
+	mixed := 0
+	if info.MixedBlock {
+		mixed = partition.mixedEnd() / hybrid.Samples
+	}
+
+	switch info.BlockType {
+	case StartBlock:
+		return hybrid.Block{Long: hybrid.Subbands, Mixed: mixed, Window: hybrid.Start}
+	case StopBlock:
+		return hybrid.Block{Long: hybrid.Subbands, Mixed: mixed, Window: hybrid.Stop}
+	case ShortBlocks:
+		return hybrid.Block{Long: mixed, Mixed: mixed, Window: hybrid.Normal}
 	default:
-		return hybrid.Block{Long: 0, Window: hybrid.Normal}
+		return hybrid.Block{Long: hybrid.Subbands, Mixed: 0, Window: hybrid.Normal}
 	}
 }

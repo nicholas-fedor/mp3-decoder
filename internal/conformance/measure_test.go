@@ -12,11 +12,12 @@ import (
 )
 
 // TestMeasure measures decoded output against references that start part way in and that take
-// the right channel, and checks the RMS and the largest difference of each channel.
+// the right channel, and checks the RMS and the largest difference of each channel. Decoded
+// samples past full scale match a reference clipped there.
 func TestMeasure(t *testing.T) {
 	t.Parallel()
 
-	decoded := [][2]float64{{9, 9}, {0.5, -0.5}, {0.25, -0.25}, {0, 0.125}, {-1, 1}}
+	decoded := [][2]float64{{1.5, -2}, {0.5, -0.5}, {0.25, -0.25}, {0, 0.125}, {-1, 0.75}}
 
 	tests := []struct {
 		name string
@@ -27,14 +28,20 @@ func TestMeasure(t *testing.T) {
 		{
 			name: "stereo from the start",
 			ref:  Reference{Name: "", MD5: "", Channels: []int{0, 1}, Start: 1, Alternative: false},
-			wave: Waveform{Channels: [][]float64{{0.5, 0.25, 0, -1}, {-0.5, -0.25, 0.125, 1}}, Rate: 0},
+			wave: Waveform{Channels: [][]float64{{0.5, 0.25, 0, -1}, {-0.5, -0.25, 0.125, 0.75}}, Rate: 0},
 			want: []Difference{{RMS: 0, Max: 0}, {RMS: 0, Max: 0}},
 		},
 		{
 			name: "right channel part way in",
 			ref:  Reference{Name: "", MD5: "", Channels: []int{1}, Start: 3, Alternative: false},
 			wave: Waveform{Channels: [][]float64{{0.375, 0}}, Rate: 0},
-			want: []Difference{{RMS: math.Sqrt((0.0625 + 1) / 2), Max: 1}},
+			want: []Difference{{RMS: math.Sqrt((0.0625 + 0.5625) / 2), Max: 0.75}},
+		},
+		{
+			name: "clipped",
+			ref:  Reference{Name: "", MD5: "", Channels: []int{0, 1}, Start: 0, Alternative: false},
+			wave: Waveform{Channels: [][]float64{{1 - 1.0/fullScale}, {-1}}, Rate: 0},
+			want: []Difference{{RMS: 0, Max: 0}, {RMS: 0, Max: 0}},
 		},
 		{
 			name: "empty",

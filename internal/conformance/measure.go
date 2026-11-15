@@ -34,7 +34,13 @@ var (
 	fullMax = math.Ldexp(1, -14)
 )
 
+// loudest is the largest sample a 24-bit reference holds, 1 - 2^-23.
+var loudest = float64(fullScale-1) / fullScale
+
 // Measure measures decoded output against the reference, channel by channel.
+//
+// Each decoded sample is first clipped to the range a 24-bit reference holds, from -1 to just
+// under 1, since a stream may decode to louder samples than a reference can hold.
 //
 // Parameters:
 //   - decoded: the stream's decoded samples, as left and right pairs.
@@ -59,7 +65,7 @@ func (r Reference) Measure(decoded [][2]float64, wave Waveform) ([]Difference, e
 		var squares, largest float64
 
 		for sample, value := range want {
-			difference := decoded[r.Start+sample][r.Channels[at]] - value
+			difference := min(max(decoded[r.Start+sample][r.Channels[at]], -1), loudest) - value
 
 			squares += float64(difference * difference)
 

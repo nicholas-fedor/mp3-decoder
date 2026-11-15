@@ -13,11 +13,14 @@ import (
 
 // TestHybridBlock checks the block the hybrid filterbank takes for each kind of granule.
 //
-// Mixed blocks hold 2 long subbands, and 4 at 8 kHz, where short band 3 starts at line 72.
+// Mixed blocks hold 2 long subbands, and 4 at 8 kHz, where short band 3 starts at line 72. A start
+// or stop block with the mixed flag gives as many subbands the normal window.
 func TestHybridBlock(t *testing.T) {
 	t.Parallel()
 
-	long := func(window hybrid.Window) hybrid.Block { return hybrid.Block{Long: hybrid.Subbands, Window: window} }
+	block := func(long, mixed int, window hybrid.Window) hybrid.Block {
+		return hybrid.Block{Long: long, Mixed: mixed, Window: window}
+	}
 
 	tests := []struct {
 		name string
@@ -25,13 +28,15 @@ func TestHybridBlock(t *testing.T) {
 		rate int
 		want hybrid.Block
 	}{
-		{"normal", GranuleInfo{}, 44100, long(hybrid.Normal)},
-		{"start", GranuleInfo{BlockType: StartBlock}, 44100, long(hybrid.Start)},
-		{"stop", GranuleInfo{BlockType: StopBlock}, 48000, long(hybrid.Stop)},
-		{"short", GranuleInfo{BlockType: ShortBlocks}, 32000, hybrid.Block{}},
-		{"mixed", GranuleInfo{BlockType: ShortBlocks, MixedBlock: true}, 44100, hybrid.Block{Long: 2}},
-		{"mixed at 22.05 kHz", GranuleInfo{BlockType: ShortBlocks, MixedBlock: true}, 22050, hybrid.Block{Long: 2}},
-		{"mixed at 8 kHz", GranuleInfo{BlockType: ShortBlocks, MixedBlock: true}, 8000, hybrid.Block{Long: 4}},
+		{"normal", GranuleInfo{}, 44100, block(32, 0, hybrid.Normal)},
+		{"start", GranuleInfo{BlockType: StartBlock}, 44100, block(32, 0, hybrid.Start)},
+		{"stop", GranuleInfo{BlockType: StopBlock}, 48000, block(32, 0, hybrid.Stop)},
+		{"short", GranuleInfo{BlockType: ShortBlocks}, 32000, block(0, 0, hybrid.Normal)},
+		{"mixed", GranuleInfo{BlockType: ShortBlocks, MixedBlock: true}, 44100, block(2, 2, hybrid.Normal)},
+		{"mixed at 22.05 kHz", GranuleInfo{BlockType: ShortBlocks, MixedBlock: true}, 22050, block(2, 2, hybrid.Normal)},
+		{"mixed at 8 kHz", GranuleInfo{BlockType: ShortBlocks, MixedBlock: true}, 8000, block(4, 4, hybrid.Normal)},
+		{"mixed start", GranuleInfo{BlockType: StartBlock, MixedBlock: true}, 44100, block(32, 2, hybrid.Start)},
+		{"mixed stop", GranuleInfo{BlockType: StopBlock, MixedBlock: true}, 8000, block(32, 4, hybrid.Stop)},
 	}
 
 	for _, tt := range tests {

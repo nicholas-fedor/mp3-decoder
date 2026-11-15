@@ -15,8 +15,8 @@ func BenchmarkTransform(b *testing.B) {
 		name  string
 		block Block
 	}{
-		{"long", Block{Long: Subbands, Window: Normal}},
-		{"short", Block{Long: 0}},
+		{"long", Block{Long: Subbands, Mixed: 0, Window: Normal}},
+		{"short", Block{Long: 0, Mixed: 0, Window: Normal}},
 	} {
 		b.Run(bench.name, func(b *testing.B) {
 			var (

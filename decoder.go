@@ -24,6 +24,8 @@ type Decoder struct {
 	layer3 layer3.Decoder
 	// pcm holds the samples of the frame decoded last.
 	pcm [frame.MaxSamples][2]float64
+	// cut holds a last frame that the stream ends inside, with zeros for the bytes it lacks.
+	cut [frame.MaxSize]byte
 	// first is the header of the stream's first frame.
 	first frame.Header
 }
@@ -83,8 +85,10 @@ func OpenStream(ctx context.Context, src io.Reader) (*Decoder, error) {
 
 // Read decodes the next samples into dst.
 //
-// The stream ends at the first bytes that do not hold a whole frame of the stream that its first
-// frame started. A mono stream gives each sample to both channels. The samples are not clipped.
+// The stream ends at the first bytes that are not a frame of the stream that its first frame
+// started. A last frame that the stream ends inside is decoded from the bytes it holds, with zeros
+// for the rest, when it holds its side information. A mono stream gives each sample to both
+// channels. The samples are not clipped.
 //
 // Parameters:
 //   - dst: where the samples go, as left and right pairs.
@@ -147,12 +151,20 @@ func (d *Decoder) decodeFrame() error {
 	}
 
 	data := d.source.bytes()
-	if len(data) < size {
+	held := min(len(data), size)
+
+	switch {
+	case held < head.DataAt():
 		return io.EOF
+	case held < size:
+		// The stream ends inside the frame. Its main data may still lie in the bytes it holds.
+		data = d.cut[:size]
+		clear(data[copy(data, d.source.bytes()):])
+	default:
 	}
 
 	err = d.layer3.Decode(d.pcm[:], head, data[:size])
-	d.source.consume(size)
+	d.source.consume(held)
 
 	if err != nil {
 		return fmt.Errorf("decode frame: %w", err)

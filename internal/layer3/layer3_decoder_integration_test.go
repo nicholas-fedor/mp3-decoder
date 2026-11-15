@@ -5,6 +5,7 @@ package layer3_test
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -58,7 +59,8 @@ func TestDecodeEncodedFiles(t *testing.T) {
 // TestDecodeJoined decodes a file from a frame whose main data begins in the frames before it, as
 // on joining a stream midway.
 //
-// The granules whose main data is missing must be silent, and the frames after them must sound.
+// The frame whose main data is missing must be silent in both granules, and the frames after it
+// must sound.
 func TestDecodeJoined(t *testing.T) {
 	t.Parallel()
 
@@ -87,14 +89,50 @@ func TestDecodeJoined(t *testing.T) {
 	head, _ := frame.Parse(frames[join])
 
 	require.NoError(t, decoder.Decode(pcm, head, frames[join]))
-	assert.Equal(t, make([][2]float64, 576), pcm[:576], "first granule")
+	assert.True(t, slices.Equal(make([][2]float64, frame.MaxSamples), pcm), "the joined frame sounds")
 
-	for _, data := range frames[join+1 : join+4] {
+	sounds := false
+
+	for _, data := range frames[join+1 : join+8] {
 		head, _ = frame.Parse(data)
 		require.NoError(t, decoder.Decode(pcm, head, data))
+
+		sounds = sounds || !slices.Equal(make([][2]float64, frame.MaxSamples), pcm)
 	}
 
-	assert.NotEqual(t, make([][2]float64, frame.MaxSamples), pcm, "a later frame")
+	assert.True(t, sounds, "no later frame sounds")
+}
+
+// TestDecodeChannelChange checks that the frames after a change between mono and stereo decode as
+// a fresh decoder decodes them: both channels' filterbanks start afresh.
+//
+// Each file's frames reach back only to its own frames, so the bit reservoir gives the same main
+// data either way.
+func TestDecodeChannelChange(t *testing.T) {
+	t.Parallel()
+
+	for _, files := range [][2]string{{"mpeg1-mono.mp3", "mpeg1-joint.mp3"}, {"mpeg1-joint.mp3", "mpeg1-mono.mp3"}} {
+		t.Run(files[0]+" then "+files[1], func(t *testing.T) {
+			t.Parallel()
+
+			var changed, fresh layer3.Decoder
+
+			got := make([][2]float64, frame.MaxSamples)
+			want := make([][2]float64, frame.MaxSamples)
+
+			for _, data := range encodedFrames(t, files[0])[:3] {
+				head, _ := frame.Parse(data)
+				require.NoError(t, changed.Decode(got, head, data))
+			}
+
+			for at, data := range encodedFrames(t, files[1])[:4] {
+				head, _ := frame.Parse(data)
+				require.NoError(t, changed.Decode(got, head, data))
+				require.NoError(t, fresh.Decode(want, head, data))
+				assert.True(t, slices.Equal(want, got), "frame %d", at)
+			}
+		})
+	}
 }
 
 // TestDecodeErrors checks that a frame the decoder refuses leaves the samples as they were.

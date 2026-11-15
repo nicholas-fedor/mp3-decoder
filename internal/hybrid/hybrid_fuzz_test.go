@@ -13,10 +13,11 @@ import (
 //
 // Each byte gives a line between -1 and 1, and lines past the bytes are 0. Each block byte picks
 // a kind of block for one granule. The seed corpus holds a long block before a short one, mixed
-// blocks after start and stop blocks, and silence.
+// blocks after start and stop blocks, mixed start and stop blocks, and silence.
 func FuzzTransform(f *testing.F) {
 	f.Add([]byte{0x40, 0xc0, 0x7f, 0x81, 0x01}, []byte{0, 3})
 	f.Add([]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77}, []byte{1, 4, 2, 5})
+	f.Add([]byte{0x7f, 0x80, 0x10}, []byte{6, 4, 7, 0})
 	f.Add([]byte{}, []byte{0})
 
 	f.Fuzz(func(t *testing.T, data, kinds []byte) {

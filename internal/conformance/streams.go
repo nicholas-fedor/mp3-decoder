@@ -3,17 +3,23 @@
 
 package conformance
 
-// Where the runs of l3_10201 after its first run of 10 mono frames start in its decoded output.
+// Where references start later than their streams' decoded output.
 const (
-	// stereoRun is the first sample of the run of 100 stereo frames, after 10 frames of 1152.
+	// stereoRun is the first sample of the run of 100 stereo frames of l3_10201, after 10 mono
+	// frames of 1152.
 	stereoRun = 11520
-	// monoRun is the first sample of the last run of 18 mono frames, after 110 frames of 1152.
+	// monoRun is the first sample of the last run of 18 mono frames of l3_10201, after 110 frames
+	// of 1152.
 	monoRun = 126720
+	// joined is the first sample of l3_10204 after its first 2 frames of 1152, whose main data
+	// lies before the stream starts and which the reference leaves out.
+	joined = 2304
 )
 
 // streams lists the Layer III conformance streams, with the checksums ISO publishes.
 //
-// Most streams have one reference that covers the whole decoded output. The references of
+// Most streams have one reference that covers the whole decoded output. The reference of
+// l3_10204, which starts midway, leaves out its first 2 frames. The references of
 // l3_10201 cover its runs of mono, stereo and mono frames in turn, and the stereo run has two
 // alternatives, named AA and noAA, which differ over its last 19 frames. The l3_10501 streams each
 // carry one or two channels of a multichannel program, whose references hold one channel each.
@@ -125,7 +131,7 @@ var streams = []Stream{
 		References: []Reference{
 			{
 				Name: "l3_10204", MD5: "35d2440de752309adf8df7783f69084e",
-				Start: 0, Channels: []int{0, 1}, Alternative: false,
+				Start: joined, Channels: []int{0, 1}, Alternative: false,
 			},
 		},
 	},

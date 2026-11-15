@@ -8,12 +8,15 @@ package hybrid
 // Window is the window the long blocks of a granule take.
 type Window uint8
 
-// Block says which subbands of a granule hold long blocks, and the window they take.
+// Block says which subbands of a granule hold long blocks, and the windows they take.
 type Block struct {
 	// Long is the number of subbands, from 0 to 32, that hold long blocks from the lowest up. The
 	// subbands above them hold short blocks.
 	Long int
-	// Window is the window of the long blocks.
+	// Mixed is the number of subbands, from the lowest up, that hold the long part of a mixed
+	// block. Their long blocks take the normal window whatever Window says.
+	Mixed int
+	// Window is the window of the long blocks above the long part of a mixed block.
 	Window Window
 }
 
@@ -63,7 +66,8 @@ func (f *Filterbank) Reset() {
 // Transform turns a granule's spectral lines into the next 18 samples of each of the 32 subbands.
 //
 // Alias reduction runs in place in lines, across each boundary between two subbands of long
-// blocks. Each long block subband then takes a 36-point IMDCT and its window. Each short block
+// blocks. Each long block subband then takes a 36-point IMDCT and its window, which is the normal
+// window in the long part of a mixed block. Each short block
 // subband takes three 12-point IMDCTs with short windows, which start 6, 12 and 18 samples into the
 // subband's block.
 //
@@ -75,7 +79,7 @@ func (f *Filterbank) Reset() {
 //   - dst: the samples, at [sample][subband].
 //   - lines: the granule's lines, 18 for each subband. A short block subband holds line f of
 //     window w at 3f+w.
-//   - block: which subbands hold long blocks, and their window.
+//   - block: which subbands hold long blocks, and their windows.
 func (f *Filterbank) Transform(dst *[Samples][Subbands]float64, lines *[granuleLines]float64, block Block) {
 	reduceAliases(lines, block.Long)
 
@@ -84,9 +88,12 @@ func (f *Filterbank) Transform(dst *[Samples][Subbands]float64, lines *[granuleL
 	for subband := range Subbands {
 		in := lines[subband*Samples : (subband+1)*Samples]
 
-		if subband < block.Long {
+		switch {
+		case subband < block.Mixed:
+			longBlock(&out, in, Normal)
+		case subband < block.Long:
 			longBlock(&out, in, block.Window)
-		} else {
+		default:
 			shortBlock(&out, in)
 		}
 

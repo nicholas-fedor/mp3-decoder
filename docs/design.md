@@ -44,6 +44,8 @@ This document explains how the decoder is built and why, part by part. Each sect
   - [Hybrid Filterbank](#hybrid-filterbank)
     - [Stages](#stages)
     - [Mixed Blocks at 8 kHz](#mixed-blocks-at-8-khz)
+    - [Mixed Start and Stop Blocks](#mixed-start-and-stop-blocks)
+    - [Channel Changes](#channel-changes)
     - [Exact Transform Tables](#exact-transform-tables)
   - [Polyphase Synthesis](#polyphase-synthesis)
     - [Flow](#flow)
@@ -315,6 +317,14 @@ The long blocks of mixed blocks end where short band 3 starts, line 36 or line 7
 
 With 2, lines 36 to 71 would take short block IMDCTs while every stage before them holds those lines as long block lines in order of frequency.
 
+#### Mixed Start and Stop Blocks
+
+The mixed block flag may be set on a start or stop block, where every stage before the filterbank holds the granule as long blocks. The subbands that would hold the long part of a mixed block, 2, or 4 at 8 kHz, then take the normal window, and the rest take the start or stop window. FFmpeg, mpg123 and dist10 window those subbands so, and the conformance streams `l3_10105`, `l3_10201` and `l3_10203` match only so. `hybrid.Block` carries the count as `Mixed`.
+
+#### Channel Changes
+
+A stream may change between mono and stereo from one frame to the next. Both channels' filterbanks, hybrid and polyphase, then start afresh, as at the start of a stream, while the bit reservoir carries on. ISO's references for `l3_10201`, which changes from mono to stereo and back, start each run from silent filterbanks, and match only so. FFmpeg and mpg123 carry the left channel's filterbanks over the change, and carrying them over differs from the references by up to 0.15 in the first granule after it.
+
 #### Exact Transform Tables
 
 The alias butterflies, the windows and the IMDCT cosines are generated into `filterbank_gen.go`. Every angle is a multiple of π/72, and the published coefficients C are parsed as exact decimals. A forward MDCT in the tests encodes random subband signals through long, start, short and stop blocks, and the filterbank gives them back to within 1e-12.
@@ -356,11 +366,13 @@ The hybrid filterbank takes the block of each granule from Layer III: every subb
 
 ### Missing Main Data
 
-A granule whose main data begins before the bytes the reservoir holds gives silence, as FFmpeg and Symphonia handle it. The filterbanks still run on the silent granule, so the granules after it continue from the right state. This happens on joining a stream midway, where the first frames reach back to main data that was never received.
+A frame whose main data begins before the bytes the reservoir holds gives silence in both granules, as mpg123 handles it. This happens on joining a stream midway, where the first frames reach back to main data that was never received. The frame's own main data still enters the reservoir, and the filterbanks still run on the silent granules, so the frames after it continue from the right state.
+
+The leading decoders differ here. FFmpeg and Symphonia silence only the granules whose main data is missing, and decode a second granule whose main data the reservoir holds. ISO's reference decoder produces nothing for such a frame, so its references start with the first frame whose main data is all there, and the conformance stream `l3_10204`, which starts midway, matches only when that frame starts from silent filterbanks. Silencing the whole frame matches the reference from its first frame on, while keeping the output's length and timing.
 
 ### End of a Stream
 
-A stream ends at the first bytes that do not hold a whole frame of the stream that its first frame started. A trailing tag, a truncated last frame or the frames of another stream all end it there. A frame that fails to decode is reported, and the next read continues with the frame after it.
+A stream ends at the first bytes that are not a frame of the stream that its first frame started. A trailing tag or the frames of another stream end it there. A last frame that the stream ends inside is decoded from the bytes it holds, with zeros for the rest, as FFmpeg does, since its granules' main data often lies wholly in the bytes it holds or in the frames before it. A last frame cut inside its side information ends the stream before it. A frame that fails to decode is reported, and the next read continues with the frame after it.
 
 ### Accuracy
 
