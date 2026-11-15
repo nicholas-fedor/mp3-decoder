@@ -86,8 +86,10 @@ const (
 
 // ParseInfo parses the Xing, Info or VBRI tag in a stream's first frame.
 //
-// A Xing or Info tag follows the side information. A protected frame may also hold it after the
-// CRC. A tag whose flags name fields that the frame ends before keeps the fields it holds.
+// Only a Layer III frame holds a tag, as mpg123 and FFmpeg read them, so a Layer I or Layer II
+// frame is audio whatever its bytes hold. A Xing or Info tag follows the side information. A
+// protected frame may also hold it after the CRC. A tag whose flags name fields that the frame
+// ends before keeps the fields it holds.
 //
 // Parameters:
 //   - head: the frame's header.
@@ -97,6 +99,12 @@ const (
 //   - Info: what the tag says.
 //   - bool: false when the frame holds no tag.
 func ParseInfo(head frame.Header, data []byte) (Info, bool) {
+	if head.Layer != frame.Layer3 {
+		var none Info
+
+		return none, false
+	}
+
 	info, ok := parseXing(data, frame.HeaderSize+head.SideInfoSize())
 	if !ok && head.Protected {
 		info, ok = parseXing(data, head.DataAt())

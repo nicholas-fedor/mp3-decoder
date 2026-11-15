@@ -27,7 +27,8 @@ func tagged(head mp3test.Header, at int, payload []byte) []byte {
 }
 
 // TestParseInfo covers tags after the CRC, tags without some fields or the LAME extension, tags
-// cut short, VBRI tags and frames without a tag.
+// cut short, VBRI tags and frames without a tag, among them Layer I and II frames whose bytes read
+// as a tag.
 func TestParseInfo(t *testing.T) {
 	t.Parallel()
 
@@ -100,6 +101,16 @@ func TestParseInfo(t *testing.T) {
 			data: tagged(plainHead, mp3test.VBRIAt, mp3test.VBRI{Version: 2, Size: 5000, Frames: 9}.Bytes()),
 		},
 		{name: "no tag", data: tagged(plainHead, 36, mp3test.Tag{Magic: "Nope"}.Bytes())},
+		{
+			name: "a Layer I frame whose bytes read as an Info tag",
+			data: tagged(mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer1, Bitrate: 9}, frame.HeaderSize,
+				mp3test.Tag{Magic: infoMagic, Flags: mp3test.HasFrames, Frames: 7}.Bytes()),
+		},
+		{
+			name: "a Layer II frame whose bytes read as a VBRI tag",
+			data: tagged(mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer2, Bitrate: 9}, mp3test.VBRIAt,
+				mp3test.VBRI{Version: vbriVersion, Size: 5000, Frames: 9}.Bytes()),
+		},
 		{name: "frame ends before the flags", data: tagged(plainHead, 36, mp3test.Tag{Magic: xingMagic}.Bytes())[:42]},
 	}
 

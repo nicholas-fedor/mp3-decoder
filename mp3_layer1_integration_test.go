@@ -6,6 +6,7 @@ package mp3_test
 import (
 	"bytes"
 	"math/rand/v2"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,6 +42,22 @@ func TestLayer1(t *testing.T) {
 	length, known := file.Len()
 	assert.True(t, known)
 	assert.Equal(t, int64(20*384), length)
+}
+
+// TestLayer2TagBytes checks that the first frame of a Layer II stream decodes as audio even when
+// its bytes read as an Info tag, since only a Layer III frame holds one.
+func TestLayer2TagBytes(t *testing.T) {
+	t.Parallel()
+
+	data, starts := audioFrames(t, "layer2-mono.mp2")
+	data = slices.Clone(data)
+	mp3test.Place(data, frame.HeaderSize, mp3test.Tag{Magic: "Info", Flags: mp3test.HasFrames, Frames: 3}.Bytes())
+
+	decoder := openFile(t, data)
+	length, _ := decoder.Len()
+
+	assert.Equal(t, int64(len(starts)*1152), length)
+	assert.Len(t, readAll(t, decoder, 1000), len(starts)*1152)
 }
 
 // layer1Stream builds a stream of Layer I frames of random fields, each with its CRC.

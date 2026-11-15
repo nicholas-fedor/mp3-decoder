@@ -138,6 +138,8 @@ The decoder gives every frame of a free-format stream the bitrate measured at it
 
 `container.ParseInfo` looks for a Xing or Info tag right after the side information, where LAME writes it even in a frame with a CRC. In a protected frame it also looks after the CRC. Fields the frame ends before are left out, and the fields before them are kept, as mpg123 does.
 
+Only a Layer III frame holds a tag. mpg123 reads the LAME tag only in Layer III, and FFmpeg's tag reader gives up on any other layer. Nor do the Layer II encoders write one. TwoLAME has no tag writer, and FFmpeg's MP3 muxer refuses Layer II audio, so its MP2 output holds bare frames. So the first frame of a Layer I or Layer II stream is audio whatever its bytes hold, and the decoder delay of 529 samples, which belongs to Layer III, never applies to those layers.
+
 #### Encoder Delay and Padding
 
 The encoder delay and padding come from the LAME extension of any encoder, as mpg123 reads them. FFmpeg reads them only from LAME and FFmpeg's own encoders. The frame count excludes the tag's frame, and the byte count includes it. So `Info.Samples` is the frame count times the samples per frame, less the delay and padding.
