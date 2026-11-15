@@ -16,7 +16,7 @@ The decoder is measured against the MPEG audio conformance streams that ISO publ
 
 ## Streams
 
-ISO's archive `compressedMpeg12.zip` holds 40 Layer III streams, and `referencesWav.zip` holds their references. The stream names give the version. `l3_1xxxx` streams are MPEG-1, `l3_2xxxx` streams are MPEG-2, and `l3_25xxx` streams are MPEG-2.5. The Layer I and Layer II streams are published only as MP4 files in `compressedMp4.zip` and are not measured.
+ISO's archive `compressedMpeg12.zip` holds 40 Layer III streams, and `referencesWav.zip` holds their references. The stream names give the version. `l3_1xxxx` streams are MPEG-1, `l3_2xxxx` streams are MPEG-2, and `l3_25xxx` streams are MPEG-2.5. The archive `compressedMp4.zip` holds the 26 Layer I and Layer II streams, each in an MP4 file that stores one frame a sample. The conformance test reads the frames out of each file's sample table. `l1_` streams are Layer I and `l2_` streams are Layer II, apart from `l2_test33`, which holds MPEG-2 Layer I frames. `l2_test27` has no reference, so 25 of them are measured.
 
 ISO's licence forbids redistributing the streams, so they are never committed. The package `internal/conformance` lists each stream and reference with the MD5 checksum ISO publishes in `mpeg4audio-conformance2ndEd_20230125.md5`.
 
@@ -28,7 +28,7 @@ ISO's licence forbids redistributing the streams, so they are never committed. T
 go run ./internal/conformance/fetch -dir DIR
 ```
 
-The fetch reads only the files it needs from ISO's archives by HTTP range requests, about 38 MB of the 9.8 GB reference archive, and checks each file's checksum before it enters the cache. A complete cache needs no network. Without `MP3_DECODER_CONFORMANCE`, the conformance test skips. With it, a missing file fails the test.
+The fetch reads only the files it needs from ISO's archives by HTTP range requests, about 43 MB of the 1.2 GB MP4 archive and the 9.8 GB reference archive, and checks each file's checksum before it enters the cache. A complete cache needs no network. Without `MP3_DECODER_CONFORMANCE`, the conformance test skips. With it, a missing file fails the test.
 
 ## Measurement
 
@@ -57,12 +57,37 @@ The test also hashes the samples it decodes from each stream, and the results re
 The conformance test records these results and the census below. Run it with `-update` and `MP3_DECODER_CONFORMANCE` set to rewrite them, and without `-update` it fails when any result changes.
 
 <!-- results start -->
-40 of 40 streams decode at full accuracy.
+40 of 65 streams decode at full accuracy.
 
-The decoded samples of all 40 streams hash to `153b0b7c31b3e88357dd263304c95c118994cecb420c79d7163d00c2e1928acd`.
+The decoded samples of all 65 streams hash to `8477f4678f4090055b1914ec12345faa2a48d027efd04170c5e37ea46c9ff084`.
 
 | Stream | Reference | Channel | RMS | Largest | Result |
 | --- | --- | --- | --- | --- | --- |
+| l1_fl1 | l1_fl1 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l1_fl2 | l1_fl2 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l1_fl3 | l1_fl3 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l1_fl4 | l1_fl4 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l1_fl5 | l1_fl5 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l1_fl6 | l1_fl6 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l1_fl7 | l1_fl7 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l1_fl8 | l1_fl8 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_fl10 | l2_fl10 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_fl11 | l2_fl11 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_fl12 | l2_fl12 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_fl13 | l2_fl13 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_fl14 | l2_fl14 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_fl15 | l2_fl15 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_fl16 | l2_fl16 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_test24 | l2_test24 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_test25 | l2_test25 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_test26 | l2_test26 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_test28 | l2_test28 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_test29 | l2_test29 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_test30 | l2_test30 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_test31 | l2_test31 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_test32 | l2_test32 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_test33 | l2_test33 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
+| l2_test34 | l2_test34 | | | | not opened, with the error "mp3: only Layer III streams are decoded" |
 | l3_10101 | l3_10101 | left | 3.5e-08 | 8.7e-08 | full accuracy |
 | l3_10102 | l3_10102 | left | 3.5e-08 | 8.7e-08 | full accuracy |
 | l3_10103 | l3_10103 | left | 3.5e-08 | 8.7e-08 | full accuracy |
@@ -139,30 +164,37 @@ The census lists the features each stream uses, read from its frame headers and 
 <!-- census start -->
 | Feature | Streams |
 | --- | --- |
-| MPEG-1 | l3_10101, l3_10102, l3_10103, l3_10104, l3_10105, l3_10106, l3_10107, l3_10201, l3_10202, l3_10203, l3_10204, l3_10205, l3_10206, l3_10207, l3_10501_b01+b02, l3_10501_b01_b02, l3_10501_f00, l3_10501_f01+f02 |
-| MPEG-2 | l3_20140, l3_20141, l3_20142, l3_20143, l3_20244, l3_20245, l3_20246, l3_20247, l3_20248 |
+| Layer I | l1_fl1, l1_fl2, l1_fl3, l1_fl4, l1_fl5, l1_fl6, l1_fl7, l1_fl8, l2_test33 |
+| Layer II | l2_fl10, l2_fl11, l2_fl12, l2_fl13, l2_fl14, l2_fl15, l2_fl16, l2_test24, l2_test25, l2_test26, l2_test28, l2_test29, l2_test30, l2_test31, l2_test32, l2_test34 |
+| Layer III | l3_10101, l3_10102, l3_10103, l3_10104, l3_10105, l3_10106, l3_10107, l3_10201, l3_10202, l3_10203, l3_10204, l3_10205, l3_10206, l3_10207, l3_10501_b01+b02, l3_10501_b01_b02, l3_10501_f00, l3_10501_f01+f02, l3_20140, l3_20141, l3_20142, l3_20143, l3_20244, l3_20245, l3_20246, l3_20247, l3_20248, l3_25101, l3_25102, l3_25103, l3_25104, l3_25201, l3_25202, l3_25203, l3_25204, l3_25205, l3_25206, l3_25207, l3_25208, l3_25209 |
+| MPEG-1 | l1_fl1, l1_fl2, l1_fl3, l1_fl4, l1_fl5, l1_fl6, l1_fl7, l1_fl8, l2_fl10, l2_fl11, l2_fl12, l2_fl13, l2_fl14, l2_fl15, l2_fl16, l3_10101, l3_10102, l3_10103, l3_10104, l3_10105, l3_10106, l3_10107, l3_10201, l3_10202, l3_10203, l3_10204, l3_10205, l3_10206, l3_10207, l3_10501_b01+b02, l3_10501_b01_b02, l3_10501_f00, l3_10501_f01+f02 |
+| MPEG-2 | l2_test24, l2_test25, l2_test26, l2_test28, l2_test29, l2_test30, l2_test31, l2_test32, l2_test33, l2_test34, l3_20140, l3_20141, l3_20142, l3_20143, l3_20244, l3_20245, l3_20246, l3_20247, l3_20248 |
 | MPEG-2.5 | l3_25101, l3_25102, l3_25103, l3_25104, l3_25201, l3_25202, l3_25203, l3_25204, l3_25205, l3_25206, l3_25207, l3_25208, l3_25209 |
 | 8 kHz | l3_25102, l3_25204, l3_25207 |
 | 11.025 kHz | l3_25103, l3_25201, l3_25202, l3_25203, l3_25205, l3_25208 |
 | 12 kHz | l3_25101, l3_25104, l3_25206, l3_25209 |
-| 16 kHz | l3_20140 |
-| 22.05 kHz | l3_20141, l3_20244, l3_20245, l3_20246, l3_20247, l3_20248 |
-| 24 kHz | l3_20142, l3_20143 |
-| 32 kHz | l3_10101 |
-| 44.1 kHz | l3_10102, l3_10104, l3_10105, l3_10106, l3_10201, l3_10202, l3_10203, l3_10204, l3_10205 |
-| 48 kHz | l3_10103, l3_10107, l3_10206, l3_10207, l3_10501_b01+b02, l3_10501_b01_b02, l3_10501_f00, l3_10501_f01+f02 |
+| 16 kHz | l2_test24, l3_20140 |
+| 22.05 kHz | l2_test25, l2_test33, l3_20141, l3_20244, l3_20245, l3_20246, l3_20247, l3_20248 |
+| 24 kHz | l2_test26, l2_test28, l2_test29, l2_test30, l2_test31, l2_test32, l2_test34, l3_20142, l3_20143 |
+| 32 kHz | l1_fl1, l1_fl4, l2_fl10, l2_fl13, l3_10101 |
+| 44.1 kHz | l1_fl2, l1_fl6, l1_fl7, l1_fl8, l2_fl11, l3_10102, l3_10104, l3_10105, l3_10106, l3_10201, l3_10202, l3_10203, l3_10204, l3_10205 |
+| 48 kHz | l1_fl3, l1_fl5, l2_fl12, l2_fl14, l2_fl15, l2_fl16, l3_10103, l3_10107, l3_10206, l3_10207, l3_10501_b01+b02, l3_10501_b01_b02, l3_10501_f00, l3_10501_f01+f02 |
 | bitrate changes | l3_10101, l3_10102, l3_10103, l3_20140, l3_20141, l3_20142, l3_20245, l3_25102, l3_25103, l3_25104, l3_25204, l3_25205, l3_25206 |
 | free format | none |
-| CRC | l3_10202 |
-| mono | l3_10101, l3_10102, l3_10103, l3_10104, l3_10105, l3_10106, l3_10107, l3_10201, l3_10206, l3_10501_f00, l3_20140, l3_20141, l3_20142, l3_20143, l3_25101, l3_25102, l3_25103, l3_25104 |
-| stereo | l3_10201, l3_10202 |
-| dual channel | l3_10201 |
+| CRC | l1_fl1, l1_fl2, l1_fl3, l1_fl5, l1_fl6, l1_fl7, l2_fl10, l2_fl11, l2_fl12, l2_fl14, l2_fl15, l2_fl16, l2_test24, l2_test25, l2_test26, l2_test28, l2_test29, l2_test30, l2_test31, l2_test33, l2_test34, l3_10202 |
+| mono | l1_fl4, l2_fl13, l2_test30, l3_10101, l3_10102, l3_10103, l3_10104, l3_10105, l3_10106, l3_10107, l3_10201, l3_10206, l3_10501_f00, l3_20140, l3_20141, l3_20142, l3_20143, l3_25101, l3_25102, l3_25103, l3_25104 |
+| stereo | l1_fl1, l1_fl2, l1_fl3, l1_fl6, l1_fl7, l1_fl8, l2_fl10, l2_fl11, l2_fl12, l2_fl15, l2_fl16, l2_test24, l2_test25, l2_test26, l2_test28, l2_test29, l2_test32, l2_test33, l2_test34, l3_10201, l3_10202 |
+| dual channel | l1_fl5, l2_fl14, l2_test31, l3_10201 |
 | joint stereo, neither | l3_10201, l3_10207, l3_10501_b01+b02, l3_10501_b01_b02, l3_10501_f01+f02, l3_20244, l3_20245, l3_20248, l3_25201, l3_25202, l3_25203, l3_25207, l3_25208, l3_25209 |
 | joint stereo, mid/side | l3_10201, l3_10204, l3_10205, l3_10207, l3_10501_b01+b02, l3_10501_b01_b02, l3_10501_f01+f02, l3_20246 |
 | joint stereo, intensity | l3_10201, l3_10203, l3_20244, l3_20245, l3_20247, l3_20248, l3_25204, l3_25205, l3_25206, l3_25207, l3_25208, l3_25209 |
 | joint stereo, mid/side and intensity | l3_10201, l3_10203, l3_20246, l3_25205, l3_25206, l3_25207, l3_25208, l3_25209 |
+| joint stereo from subband 4 | l1_fl1, l1_fl2, l1_fl3, l2_fl10, l2_fl11, l2_fl12, l2_test24, l2_test25, l2_test26, l2_test28, l2_test29, l2_test33 |
+| joint stereo from subband 8 | l1_fl1, l1_fl2, l1_fl3, l2_fl10, l2_fl11, l2_fl12, l2_test24, l2_test25, l2_test26, l2_test28, l2_test29, l2_test33 |
+| joint stereo from subband 12 | l1_fl1, l1_fl2, l1_fl3, l2_fl10, l2_fl11, l2_fl12, l2_test24, l2_test25, l2_test26, l2_test28, l2_test29, l2_test33 |
+| joint stereo from subband 16 | l1_fl1, l1_fl2, l1_fl3, l2_fl10, l2_fl11, l2_fl12, l2_test24, l2_test25, l2_test26, l2_test28, l2_test29, l2_test33 |
 | a change between mono and stereo | l3_10201 |
-| normal blocks | all 40 |
+| normal blocks | l3_10101, l3_10102, l3_10103, l3_10104, l3_10105, l3_10106, l3_10107, l3_10201, l3_10202, l3_10203, l3_10204, l3_10205, l3_10206, l3_10207, l3_10501_b01+b02, l3_10501_b01_b02, l3_10501_f00, l3_10501_f01+f02, l3_20140, l3_20141, l3_20142, l3_20143, l3_20244, l3_20245, l3_20246, l3_20247, l3_20248, l3_25101, l3_25102, l3_25103, l3_25104, l3_25201, l3_25202, l3_25203, l3_25204, l3_25205, l3_25206, l3_25207, l3_25208, l3_25209 |
 | start blocks | l3_10105, l3_10107, l3_10201, l3_10203, l3_10207, l3_10501_b01+b02, l3_10501_b01_b02, l3_10501_f00, l3_10501_f01+f02, l3_20140, l3_20141, l3_20142, l3_20244, l3_25102, l3_25103, l3_25104, l3_25201, l3_25204, l3_25205, l3_25206, l3_25207, l3_25208, l3_25209 |
 | short blocks | l3_10105, l3_10107, l3_10201, l3_10203, l3_10207, l3_10501_b01+b02, l3_10501_b01_b02, l3_10501_f00, l3_10501_f01+f02, l3_20140, l3_20141, l3_20142, l3_20244, l3_20245, l3_20246, l3_25102, l3_25103, l3_25104, l3_25201, l3_25204, l3_25205, l3_25206, l3_25207, l3_25208, l3_25209 |
 | stop blocks | l3_10105, l3_10107, l3_10201, l3_10203, l3_10207, l3_10501_b01+b02, l3_10501_b01_b02, l3_10501_f00, l3_10501_f01+f02, l3_20140, l3_20141, l3_20142, l3_20244, l3_25102, l3_25103, l3_25104, l3_25201, l3_25204, l3_25205, l3_25206, l3_25207, l3_25208, l3_25209 |

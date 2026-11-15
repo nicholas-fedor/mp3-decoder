@@ -42,3 +42,23 @@ func FuzzParseWAV(f *testing.F) {
 		}
 	})
 }
+
+// FuzzMP4Frames reads any bytes as an MP4 file and checks that it never panics and fails only
+// with ErrMP4.
+//
+// The seed corpus holds a file of listed sample sizes in runs of chunks, one of uniform sizes with
+// 64-bit offsets, and one cut short.
+func FuzzMP4Frames(f *testing.F) {
+	samples := [][]byte{[]byte("one"), []byte("two"), []byte("three")}
+
+	f.Add(mp4File(mp4Layout{samples: samples, runs: [][2]uint32{{1, 2}, {2, 1}}, chunks: 2}))
+	f.Add(mp4File(mp4Layout{samples: samples[:2], runs: [][2]uint32{{1, 1}}, chunks: 2, uniform: true, wide: true}))
+	f.Add(mp4File(mp4Layout{samples: samples, runs: [][2]uint32{{1, 3}}, chunks: 1})[:40])
+
+	f.Fuzz(func(t *testing.T, file []byte) {
+		_, err := mp4Frames(file)
+		if err != nil {
+			require.ErrorIs(t, err, ErrMP4)
+		}
+	})
+}

@@ -4,6 +4,8 @@
 package conformance
 
 import (
+	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -11,12 +13,15 @@ import (
 
 // Stream is a conformance stream and the references its decoded output is measured against.
 type Stream struct {
-	// Name is the stream's file name without its .mpg extension.
+	// Name is the stream's file name without its extension.
 	Name string
 	// MD5 is the stream's MD5 checksum in hexadecimal, as ISO publishes it.
 	MD5 string
 	// References holds the references, which together cover the decoded output.
 	References []Reference
+	// MP4 reports whether ISO publishes the stream inside an MP4 file, as it does the Layer I and
+	// Layer II streams, rather than as MPEG audio frames alone.
+	MP4 bool
 }
 
 // Reference is a reference waveform and the part of a stream's decoded output it covers.
@@ -54,6 +59,10 @@ const (
 	streamArchive = "compressedMpeg12.zip"
 	// streamDir is the streams' directory in their archive.
 	streamDir = "compressedMpeg12/add-opt/"
+	// mp4Archive is the archive of the streams in MP4 files.
+	mp4Archive = "compressedMp4.zip"
+	// mp4Dir is the MP4 files' directory in their archive.
+	mp4Dir = "compressedMp4/"
 	// referenceArchive is the archive of the reference waveforms.
 	referenceArchive = "referencesWav.zip"
 	// referenceDir is the references' directory in their archive.
@@ -65,7 +74,7 @@ const (
 // Returns:
 //   - []Stream: the streams, by name.
 func Streams() []Stream {
-	listed := slices.Clone(streams)
+	listed := slices.Concat(layer12Streams, streams)
 
 	for at := range listed {
 		listed[at].References = slices.Clone(listed[at].References)
@@ -89,11 +98,38 @@ func (s Stream) Path(dir string) string {
 	return s.file().path(dir)
 }
 
+// Read returns the stream's MPEG audio frames from a cache.
+//
+// A stream that ISO publishes inside an MP4 file is taken out of it.
+//
+// Parameters:
+//   - dir: the cache.
+//
+// Returns:
+//   - []byte: the frames.
+//   - error: the read failure, or [ErrMP4] for an MP4 file whose samples cannot be read.
+func (s Stream) Read(dir string) ([]byte, error) {
+	data, err := os.ReadFile(s.Path(dir))
+	if err != nil {
+		return nil, fmt.Errorf("read stream: %w", err)
+	}
+
+	if !s.MP4 {
+		return data, nil
+	}
+
+	return mp4Frames(data)
+}
+
 // file returns the stream's file in its archive.
 //
 // Returns:
 //   - file: the file.
 func (s Stream) file() file {
+	if s.MP4 {
+		return file{archive: mp4Archive, member: mp4Dir + s.Name + ".mp4", md5: s.MD5}
+	}
+
 	return file{archive: streamArchive, member: streamDir + s.Name + ".mpg", md5: s.MD5}
 }
 

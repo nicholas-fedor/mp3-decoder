@@ -84,7 +84,7 @@ Generated values are computed from closed forms with `math/big` and rounded to t
 
 Every machine decodes the same bits. The Go specification lets a compiler fuse a product with a sum into one multiply-add, which rounds once where the code rounds twice. Only an explicit conversion to a floating-point type forbids it. arm64 fuses such pairs by default. amd64 fuses them at GOAMD64=v3, and only when both operands sit in registers. So every floating-point product is converted where it is made, as in `float64(a * b)`. `TestProductsRounded` type-checks the decoder's production code and fails on any product that is not.
 
-`TestGolden` records the SHA-256 hash of the samples each fixture decodes to, and the [conformance results](conformance.md#results) record one hash of the samples of all 40 streams. `task test:fma` reruns the decoder's tests at GOAMD64=v3, and on arm64 under qemu-aarch64. With one synthesis product left unconverted, the arm64 run changed both hashes. The GOAMD64=v3 run changed neither, since that product reads a table from memory.
+`TestGolden` records the SHA-256 hash of the samples each fixture decodes to, and the [conformance results](conformance.md#results) record one hash of the samples of all the conformance streams. `task test:fma` reruns the decoder's tests at GOAMD64=v3, and on arm64 under qemu-aarch64. With one synthesis product left unconverted, the arm64 run changed both hashes. The GOAMD64=v3 run changed neither, since that product reads a table from memory.
 
 ## Stream Structure
 
