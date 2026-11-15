@@ -9,7 +9,9 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"testing/iotest"
 
@@ -23,26 +25,29 @@ import (
 	"github.com/nicholas-fedor/mp3-decoder/internal/mp3test"
 )
 
-// TestReferences decodes each MPEG-1 fixture without its tag frame and checks it against the
-// references mpg123 and ffmpeg decoded, channel by channel.
+// TestReferences decodes each fixture with references without its tag frame and checks it against
+// the references mpg123 and ffmpeg decoded, channel by channel.
 //
 // Neither tool leaves samples out of the references, and without the tag frame the decoder leaves
-// out none either.
-// Every sample must be there, and the difference must stay within full accuracy. It must also
-// stay within twice the largest RMS difference measured from each tool, so a loss of precision
-// shows long before it breaks the bound. ffmpeg refuses the free-format fixture, so only mpg123's
-// reference checks it.
+// out none either. Every sample must be there, and the difference must stay within full accuracy.
+// It must also stay within twice the largest RMS difference measured from each tool, so a loss of
+// precision shows long before it breaks the bound. The references are not clipped, and the tone
+// peaks above full scale, so the samples are compared unclipped. ffmpeg refuses the free-format fixture and
+// skips the first frame of the joint stereo Layer II fixture, so only mpg123's references check
+// them.
 func TestReferences(t *testing.T) {
 	t.Parallel()
 
-	ceilings := map[string]float64{"mpg123": 1.6e-7, "ffmpeg": 3e-7}
+	ceilings := map[string]float64{"mpg123": 1.6e-7, "ffmpeg": 4.5e-7}
 	fixtures := map[string][]string{
-		"mpeg1-joint": {"mpg123", "ffmpeg"}, "mpeg1-mono": {"mpg123", "ffmpeg"}, "protected": {"mpg123", "ffmpeg"},
-		"free": {"mpg123"},
+		"mpeg1-joint.mp3": {"mpg123", "ffmpeg"}, "mpeg1-mono.mp3": {"mpg123", "ffmpeg"},
+		"protected.mp3": {"mpg123", "ffmpeg"}, "free.mp3": {"mpg123"}, "layer2-joint.mp2": {"mpg123"},
+		"layer2-mono.mp2": {"mpg123", "ffmpeg"}, "layer2-mpeg2.mp2": {"mpg123", "ffmpeg"},
 	}
 
-	for name, tools := range fixtures {
-		audio, _ := audioFrames(t, name+".mp3")
+	for file, tools := range fixtures {
+		name := strings.TrimSuffix(file, filepath.Ext(file))
+		audio, _ := audioFrames(t, file)
 		got := decodeBytes(t, audio)
 
 		for _, tool := range tools {
@@ -52,21 +57,38 @@ func TestReferences(t *testing.T) {
 				t.Parallel()
 
 				wave := readReference(t, name+"."+tool+".f32", len(got))
-				ref := conformance.Reference{
-					Name: name, MD5: "", Channels: []int{0, 1}[:len(wave.Channels)], Start: 0, Alternative: false,
-				}
-
-				differences, err := ref.Measure(got, wave)
-				require.NoError(t, err)
 				require.Len(t, wave.Channels[0], len(got), "samples")
 
-				for ch, difference := range differences {
+				for ch, difference := range unclipped(got, wave) {
 					assert.True(t, difference.Full(), "channel %d: %+v", ch, difference)
 					assert.Less(t, difference.RMS, ceiling, "channel %d RMS", ch)
 				}
 			})
 		}
 	}
+}
+
+// TestFreeFormatLayer2 checks that a free-format Layer II stream takes the allocation table of its
+// bitrate per channel, as its encoder does.
+//
+// The fixture holds the same tone as one at a fixed 384 kbit/s, which takes the same table of 30
+// subbands, so the two decode alike but for coding noise. Taking the table of 27 subbands, as
+// mpg123 does, differs from it by an RMS of 0.48.
+func TestFreeFormatLayer2(t *testing.T) {
+	t.Parallel()
+
+	free, fixed := decodeFile(t, "layer2-free.mp2"), decodeFile(t, "layer2-384.mp2")
+	require.Len(t, free, len(fixed))
+
+	sum := 0.0
+
+	for at := range free {
+		for ch := range free[at] {
+			sum += (free[at][ch] - fixed[at][ch]) * (free[at][ch] - fixed[at][ch])
+		}
+	}
+
+	assert.Less(t, math.Sqrt(sum/float64(2*len(free))), 2e-3)
 }
 
 // TestGapless checks that each fixture with a LAME tag decodes to exactly the 0.5 s of samples
@@ -238,6 +260,27 @@ func readAll(tb testing.TB, decoder *mp3.Decoder, size int) [][2]float64 {
 		require.NoError(tb, err)
 		require.Positive(tb, read)
 	}
+}
+
+// unclipped measures each channel of a reference against the decoded samples, without clipping
+// either.
+func unclipped(decoded [][2]float64, wave conformance.Waveform) []conformance.Difference {
+	differences := make([]conformance.Difference, 0, len(wave.Channels))
+
+	for ch, want := range wave.Channels {
+		var squares, largest float64
+
+		for sample, value := range want {
+			difference := decoded[sample][ch] - value
+
+			squares += float64(difference * difference)
+			largest = max(largest, math.Abs(difference))
+		}
+
+		differences = append(differences, conformance.Difference{RMS: math.Sqrt(squares / float64(len(want))), Max: largest})
+	}
+
+	return differences
 }
 
 // readReference reads a reference of interleaved 32-bit little-endian floats, with as many

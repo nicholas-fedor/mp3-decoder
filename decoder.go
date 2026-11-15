@@ -22,7 +22,7 @@ type Decoder struct {
 	pending [][2]float64
 	// scanner finds the stream's frames.
 	scanner scanner
-	// layer12 decodes the frames of a Layer I stream.
+	// layer12 decodes the frames of a Layer I or Layer II stream.
 	layer12 layer12.Decoder
 	// layer3 decodes the frames of a Layer III stream.
 	layer3 layer3.Decoder
@@ -69,13 +69,8 @@ type Stats struct {
 // tailSize is the most bytes at the end of a file searched for the tags after its audio.
 const tailSize = 64 << 10
 
-// Errors from opening a stream.
-var (
-	// ErrNoFrames is returned for a stream in which no frame is found.
-	ErrNoFrames = errors.New("mp3: no frames found")
-	// ErrLayer is returned for a stream of Layer II frames.
-	ErrLayer = errors.New("mp3: Layer II streams are not decoded")
-)
+// ErrNoFrames is returned for a stream in which no frame is found.
+var ErrNoFrames = errors.New("mp3: no frames found")
 
 // Errors from seeking.
 var (
@@ -98,7 +93,7 @@ var (
 //
 // Returns:
 //   - *Decoder: the decoder, at the first frame.
-//   - error: [ErrNoFrames], [ErrLayer], a read or seek error, or the context's error.
+//   - error: [ErrNoFrames], a read or seek error, or the context's error.
 func Open(ctx context.Context, src io.ReadSeeker) (*Decoder, error) {
 	end, err := audioEnd(src)
 	if err != nil {
@@ -153,7 +148,7 @@ func Open(ctx context.Context, src io.ReadSeeker) (*Decoder, error) {
 //
 // Returns:
 //   - *Decoder: the decoder, at the first frame.
-//   - error: [ErrNoFrames], [ErrLayer], a read error, or the context's error.
+//   - error: [ErrNoFrames], a read error, or the context's error.
 func OpenStream(ctx context.Context, src io.Reader) (*Decoder, error) {
 	decoder := new(Decoder)
 
@@ -162,10 +157,6 @@ func OpenStream(ctx context.Context, src io.Reader) (*Decoder, error) {
 	err := decoder.scanner.open(ctx)
 	if err != nil {
 		return nil, err
-	}
-
-	if decoder.scanner.first.Layer == frame.Layer2 {
-		return nil, ErrLayer
 	}
 
 	decoder.padding = paddingOf(decoder.scanner.tag, decoder.scanner.first)

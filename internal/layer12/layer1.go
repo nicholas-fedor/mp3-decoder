@@ -15,15 +15,13 @@ const (
 	forbiddenAllocation = 15
 	// scalefactorBits is the width of a scalefactor index.
 	scalefactorBits = 6
-	// fullRange is the width of the range from -1 to 1 that a subband's quantization steps divide.
-	fullRange = 2
 )
 
-// readAllocation reads the number of bits of each subband's samples.
+// readAllocation reads the class of each subband's samples.
 //
 // Below the bound each channel has its own allocation. From the bound on, both channels share one.
 // An allocation of 0 gives a subband no samples, and any other allocation n gives samples of n+1
-// bits.
+// bits, whose 2^(n+1)-1 steps the codes short of all ones take.
 //
 // Parameters:
 //   - channels: the frame's number of channels.
@@ -36,17 +34,19 @@ func (d *Decoder) readAllocation(channels, bound int) bool {
 
 	for sb := range synth.Subbands {
 		for ch := range channels {
-			if sb < bound || ch == 0 {
-				allocation := int(d.stream.Read(allocationBits))
+			if sb >= bound && ch > 0 {
+				d.classes[ch][sb] = d.classes[0][sb]
 
-				allowed = allowed && allocation != forbiddenAllocation
+				continue
+			}
 
-				d.widths[ch][sb] = 0
-				if allocation > 0 {
-					d.widths[ch][sb] = allocation + 1
-				}
-			} else {
-				d.widths[ch][sb] = d.widths[0][sb]
+			allocation := int(d.stream.Read(allocationBits))
+
+			allowed = allowed && allocation != forbiddenAllocation
+
+			d.classes[ch][sb] = quantClass{steps: 0, bits: 0, grouped: false}
+			if allocation > 0 {
+				d.classes[ch][sb] = quantClass{steps: 1<<(allocation+1) - 1, bits: allocation + 1, grouped: false}
 			}
 		}
 	}
@@ -57,24 +57,14 @@ func (d *Decoder) readAllocation(channels, bound int) bool {
 // readScalefactors reads the scalefactor of each subband with samples, and works out the size of
 // its quantization steps.
 //
-// A sample of n bits with value s stands for 2(s+1-2^(n-1))/(2^n-1) times the scalefactor, so a
-// step is 2/(2^n-1) times the scalefactor.
-//
 // Parameters:
 //   - channels: the frame's number of channels.
 func (d *Decoder) readScalefactors(channels int) {
 	for sb := range synth.Subbands {
 		for ch := range channels {
-			width := d.widths[ch][sb]
-			if width == 0 {
-				d.steps[ch][sb] = 0
-
-				continue
+			if class := d.classes[ch][sb]; class.steps > 0 {
+				d.steps[ch][sb] = class.step(scalefactors[d.stream.Read(scalefactorBits)])
 			}
-
-			factor := scalefactors[d.stream.Read(scalefactorBits)]
-
-			d.steps[ch][sb] = float64(factor * (fullRange / float64(int(1)<<width-1)))
 		}
 	}
 }
@@ -92,18 +82,18 @@ func (d *Decoder) readSet(channels, bound int) {
 		var code int
 
 		for ch := range channels {
-			width := d.widths[ch][sb]
-			if width == 0 {
-				d.samples[ch][sb] = 0
+			class := d.classes[ch][sb]
+			if class.steps == 0 {
+				d.samples[0][ch][sb] = 0
 
 				continue
 			}
 
 			if sb < bound || ch == 0 {
-				code = int(d.stream.Read(width)) + 1 - 1<<(width-1)
+				code = int(d.stream.Read(class.bits))
 			}
 
-			d.samples[ch][sb] = float64(d.steps[ch][sb] * float64(code))
+			d.samples[0][ch][sb] = class.requantize(code, d.steps[ch][sb])
 		}
 	}
 }

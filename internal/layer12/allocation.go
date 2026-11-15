@@ -5,8 +5,7 @@ package layer12
 
 import "github.com/nicholas-fedor/mp3-decoder/frame"
 
-// quantClass is a Layer II class of quantization, the steps its samples take and how they are
-// coded.
+// quantClass is a class of quantization, the steps its samples take and how they are coded.
 type quantClass struct {
 	// steps is the number of quantization steps, which is odd, so the steps center on 0.
 	steps int
@@ -30,6 +29,9 @@ type allocationRun struct {
 // allocationTable is a Layer II bit allocation table, the runs of the subbands a frame codes from
 // subband 0 up.
 type allocationTable []allocationRun
+
+// fullRange is the width of the range from -1 to 1 that a class's quantization steps divide.
+const fullRange = 2
 
 // The bitrates per channel, in bit/s, and the sampling frequencies that choose an MPEG-1
 // allocation table.
@@ -134,6 +136,33 @@ var (
 		{[]quantClass{steps3, steps5, steps9}, 19, 2},
 	}
 )
+
+// requantize returns the value a sample's code stands for.
+//
+// The N steps center on 0, so code k stands for k-(N-1)/2 steps.
+//
+// Parameters:
+//   - code: the sample's code.
+//   - step: the size of a step, scaled by the subband's scalefactor.
+//
+// Returns:
+//   - float64: the value.
+func (c quantClass) requantize(code int, step float64) float64 {
+	return float64(step * float64(code-(c.steps-1)/2))
+}
+
+// step returns the size of one of the class's quantization steps, scaled by a scalefactor.
+//
+// The steps divide the range from -1 to 1, so a step is 2/N of the scalefactor for N steps.
+//
+// Parameters:
+//   - factor: the scalefactor.
+//
+// Returns:
+//   - float64: the size of a step.
+func (c quantClass) step(factor float64) float64 {
+	return float64(factor * (fullRange / float64(c.steps)))
+}
 
 // allocationFor returns the allocation table of a Layer II frame.
 //

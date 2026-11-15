@@ -64,6 +64,9 @@ This document explains how the decoder is built and why, part by part. Each sect
   - [Allocation Tables](#allocation-tables)
   - [Choosing a Table](#choosing-a-table)
   - [Quantization Classes](#quantization-classes)
+  - [Frame Layout](#frame-layout)
+  - [Scalefactor Selection](#scalefactor-selection)
+  - [Words No Encoder Writes](#words-no-encoder-writes)
 - [Stream Decoding](#stream-decoding)
   - [Opening a Stream](#opening-a-stream)
   - [Length](#length)
@@ -452,7 +455,7 @@ A 6-bit index selects each scalefactor, 2^(1-i/3) for index i. The table is gene
 
 ### Sample Requantization
 
-A sample of n bits with code c stands for 2(c+1-2^(n-1))/(2^n-1) times its scalefactor. The codes divide the range from -1 to 1 into 2^n-1 steps, centred on 0. The decoder works out the step of each subband once a frame, as the scalefactor times 2/(2^n-1), and multiplies each sample's offset from the centre by it.
+A sample of n bits with code c stands for 2(c+1-2^(n-1))/(2^n-1) times its scalefactor. The codes divide the range from -1 to 1 into 2^n-1 steps, centred on 0. The decoder works out the step of each subband once a frame, as the scalefactor times 2/(2^n-1), and multiplies each sample's offset from the centre by it. A Layer I sample of n bits is a class of 2^n-1 steps, and `quantClass` requantizes the samples of both layers by this one rule.
 
 ### Values No Encoder Writes
 
@@ -484,11 +487,50 @@ An MPEG-1 frame's table follows its sampling frequency and its bitrate per chann
 | Free format, above 80 and below 96 kbit/s | 27 subbands | 27 at 48 kHz, 12 otherwise | 27 at 48 kHz, 30 otherwise | 27 at 48 kHz, 30 otherwise |
 | Free format, from 96 kbit/s | 27 subbands | 27 at 48 kHz, 30 otherwise | 27 at 48 kHz, 30 otherwise | 27 at 48 kHz, 30 otherwise |
 
-mpg123 chooses by the bitrate index, so a free-format stream always takes its entry for index 0. FFmpeg and libmad choose by the bitrate a free-format stream measures. libmad takes the listed tables only at exactly the bitrates the lists name. Between them FFmpeg falls through to the table of 12 subbands, which ISO gives only to 32 kHz. This decoder reads ISO's lists as ranges, so every bitrate falls in one. Below 56 kbit/s a frame takes the table of 8 subbands, or 12 at 32 kHz, as the lowest bitrates do. Up to 80 kbit/s it takes the table of 27. Above that it takes 27 at 48 kHz and 30 otherwise, as the highest bitrates do.
+mpg123 chooses by the bitrate index, so a free-format stream always takes its entry for index 0, and decodes free-format streams from TwoLAME wrongly. FFmpeg and libmad choose by the bitrate a free-format stream measures. libmad takes the listed tables only at exactly the bitrates the lists name. Between them FFmpeg falls through to the table of 12 subbands, which ISO gives only to 32 kHz. This decoder reads ISO's lists as ranges, so every bitrate falls in one. Below 56 kbit/s a frame takes the table of 8 subbands, or 12 at 32 kHz, as the lowest bitrates do. Up to 80 kbit/s it takes the table of 27. Above that it takes 27 at 48 kHz and 30 otherwise, as the highest bitrates do.
+
+TwoLAME chooses the table of a free-format stream by its bitrate too. Its stream at 400 kbit/s takes the table of 30 subbands, and decodes to within an RMS of 8.0e-4 of the same tone at a fixed 384 kbit/s, which takes the same table. mpg123's output of it differs from that by an RMS of 0.48. `TestFreeFormatLayer2` checks the decoder against the fixed-rate stream.
 
 ### Quantization Classes
 
-A class gives the steps of its samples and how they are coded. The classes of 3, 5 and 9 steps code three samples in one code word of 5, 7 or 10 bits. The first sample takes the lowest place. Every other class has 2^n-1 steps and codes each sample in n bits, from 3 bits for 7 steps to 16 bits for 65535.
+A class gives the steps of its samples and how they are coded. The classes of 3, 5 and 9 steps code three samples in one code word of 5, 7 or 10 bits. The first sample takes the lowest place. Every other class has 2^n-1 steps and codes each sample in n bits, from 3 bits for 7 steps to 16 bits for 65535. A code k of a class of N steps stands for (2k-(N-1))/N times its scalefactor, so the steps centre on 0 and fill the range from -1 to 1.
+
+### Frame Layout
+
+A Layer II frame holds 36 sets of subband samples in three parts of 12. Each part has its own scalefactors, and its samples come in four granules of three sets. The frame carries these fields in turn:
+
+1. The allocation of each subband the table codes, for each channel below the joint stereo bound and once for both from it on. The bound may lie above the subbands the table codes, and then every subband the table codes is below it.
+2. A scalefactor selection of 2 bits for each subband and channel with samples.
+3. The scalefactors each selection calls for.
+4. Each granule's codes, subband by subband, for each channel below the bound and once for both from it on. Both channels scale shared codes by their own scalefactors.
+
+`layer12.Decoder` decodes the three sets of a granule, then synthesizes them, so it keeps only those sets. The subbands above those the table codes hold no samples.
+
+### Scalefactor Selection
+
+A selection says which parts share a subband's scalefactors, and so how many the frame carries:
+
+| Selection | Scalefactors carried | Part 1 | Part 2 | Part 3 |
+| --- | --- | --- | --- | --- |
+| 0 | 3 | The first | The second | The third |
+| 1 | 2 | The first | The first | The second |
+| 2 | 1 | The first | The first | The first |
+| 3 | 2 | The first | The second | The second |
+
+FFmpeg, mpg123 and libmad read the selections so.
+
+### Words No Encoder Writes
+
+A grouped code word of n bits can hold more than the N³ words three samples of N steps need. The classes of 3 and 5 steps leave 5 and 3 words unused, and the class of 9 steps leaves 295. No encoder writes them, and the leading decoders read them differently:
+
+| Decoder | A grouped word past N³ |
+| --- | --- |
+| mpg123 | Its grouping tables hold 0 past the valid words, so the three samples are 0 |
+| libmad | Takes each code modulo N, so the third sample wraps |
+| FFmpeg | Leaves the third sample unbounded, past the class's steps |
+| This decoder | Gives the three samples 0, as mpg123 does |
+
+Silence for a word no encoder writes matches the scalefactor index 63 in both layers. Layer II has no forbidden allocation, so every Layer II frame decodes.
 
 ## Stream Decoding
 
@@ -508,7 +550,7 @@ The walk also fills the frame index that [Seeking](#seeking) uses. `mp3.OpenStre
 
 ### Frame Decoding
 
-`layer3.Decoder` decodes a Layer III frame through every stage, granule by granule. It keeps what one frame passes to the next: the bit reservoir, the scalefactors that scfsi reuses, and each channel's filterbanks. `layer12.Decoder` decodes a Layer I frame. A stream keeps its layer, so the decoder of the first frame's layer decodes them all. A mono frame gives each sample to both channels, and samples are not clipped.
+`layer3.Decoder` decodes a Layer III frame through every stage, granule by granule. It keeps what one frame passes to the next: the bit reservoir, the scalefactors that scfsi reuses, and each channel's filterbanks. `layer12.Decoder` decodes a Layer I or Layer II frame. A stream keeps its layer, so the decoder of the first frame's layer decodes them all. A mono frame gives each sample to both channels, and samples are not clipped.
 
 A frame that holds a value no encoder writes fails to decode. In Layer III that is a value of its side information, and in Layer I it is the forbidden allocation. It gives silence in its place, as mpg123 fills such a frame with zeros. Every frame then keeps its samples, so `Len`, positions and seeks stay exact after damage.
 
@@ -549,7 +591,7 @@ The decoder follows FFmpeg, whose frames past the count still play, so a stream 
 - Its main data may begin up to 511 bytes back in MPEG-1, and 255 bytes back at the lower sampling frequencies.
 - The hybrid filterbank's overlap and the polyphase synthesis carry samples of each granule into the next two.
 
-So decoding starts afresh enough frames earlier to cover both. In Layer I only the synthesis reaches back. It carries each set of 32 subband samples into the output of the next 15, and a Layer I frame holds 12 sets, so decoding starts 2 frames before the target's frame. In Layer III the reservoir sets the count. The first frames must fill the bit reservoir that far even when they are the smallest frames the stream could hold. Those are frames at its lowest bitrate with a CRC and two channels. The frames of the two granules before the target's frame follow. Each stage keeps only this bounded past. The synthesis also sums its values in the same order wherever its ring buffer stands. So from the target's frame on, the state is the one a decode from the start reaches. The frames decoded first may give silence, and their samples are dropped. `frame.Header.Preroll` gives the count from a stream's header, so a player that opens a file partway through, at a byte offset, can start that many frames before the sample it wants too. On a damaged stream, a frame in that span that fails to decode adds no main data to the reservoir, so the frames just after it may decode otherwise than from the start.
+So decoding starts afresh enough frames earlier to cover both. In Layers I and II only the synthesis reaches back. It carries each set of 32 subband samples into the output of the next 15. A Layer I frame holds 12 sets, so decoding starts 2 frames before the target's frame. A Layer II frame holds 36, so it starts 1 frame before. In Layer III the reservoir sets the count. The first frames must fill the bit reservoir that far even when they are the smallest frames the stream could hold. Those are frames at its lowest bitrate with a CRC and two channels. The frames of the two granules before the target's frame follow. Each stage keeps only this bounded past. The synthesis also sums its values in the same order wherever its ring buffer stands. So from the target's frame on, the state is the one a decode from the start reaches. The frames decoded first may give silence, and their samples are dropped. `frame.Header.Preroll` gives the count from a stream's header, so a player that opens a file partway through, at a byte offset, can start that many frames before the sample it wants too. On a damaged stream, a frame in that span that fails to decode adds no main data to the reservoir, so the frames just after it may decode otherwise than from the start.
 
 | Stream | Smallest frame's main data | Frames for the reservoir | Frames for the filterbanks | Frames decoded first |
 | --- | --- | --- | --- | --- |
@@ -560,6 +602,7 @@ So decoding starts afresh enough frames earlier to cover both. In Layer I only t
 | MPEG-2 at 24 kHz | 1 byte | 255 | 2 | 257 |
 | MPEG-2.5 at 8 kHz | 49 bytes | 6 | 2 | 8 |
 | Layer I | No reservoir | 0 | 2 | 2 |
+| Layer II | No reservoir | 0 | 1 | 1 |
 
 The bound needs no side information, so the frame to start from follows from frame numbers alone. mpg123 decodes 4 frames before the target by default, which suits most streams but can fall short of the reservoir's reach. On the fixtures, starting only 3 frames back already changes samples of the joint stereo and MPEG-2 fixtures.
 
@@ -582,13 +625,14 @@ The CRC covers the last two bytes of a frame's header and the first bits after t
 | Layer | Bits after the CRC that it covers |
 | --- | --- |
 | Layer I | The bit allocation, 4 bits for each subband and channel below the bound and for each subband from it on |
+| Layer II | The bit allocation, then the scalefactor selection of each subband and channel with samples |
 | Layer III | The side information |
 
-A frame whose CRC does not match is decoded anyway, as FFmpeg and mpg123 decode it. mpg123 never checks the CRC. FFmpeg checks it only when its `err_detect` option asks, and then only logs a mismatch unless `explode` is set too. In a stereo Layer I frame, FFmpeg's check covers 256 bits whatever the bound, which in joint stereo runs past the allocation. libmad covers the allocation alone, as this decoder does. Every frame of the fixture LAME encoded with CRCs passes, and so does every frame of the conformance streams, seven of the Layer I streams among them. A damaged CRC changes no sample. The frames a seek decodes before its sample are not counted, since the first of them give silence by design.
+A frame whose CRC does not match is decoded anyway, as FFmpeg and mpg123 decode it. mpg123 never checks the CRC. FFmpeg checks it only when its `err_detect` option asks, and then only logs a mismatch unless `explode` is set too. In a stereo Layer I frame, FFmpeg's check covers 256 bits whatever the bound, which in joint stereo runs past the allocation. libmad covers the allocation alone, as this decoder does. libmad and FFmpeg cover the same Layer II bits. Every frame of the fixtures LAME and TwoLAME encoded with CRCs passes, and so does every frame of the conformance streams, which carry CRCs in seven Layer I streams and fourteen Layer II streams. A damaged CRC changes no sample. The frames a seek decodes before its sample are not counted, since the first of them give silence by design.
 
 ### Accuracy
 
-The MPEG-1 fixtures decode against the 32-bit float output of mpg123 1.33.7 and FFmpeg n9.0.2, with neither leaving out the encoder delay:
+The fixtures decode against the 32-bit float output of mpg123 1.33.7 and FFmpeg n9.0.2, with neither leaving out the encoder delay. FFmpeg's Layer II output comes from its floating-point decoder, mp2float, since its default MP2 decoder computes in fixed point. FFmpeg skips the first frame of the joint stereo Layer II fixture as junk, so it is measured from the 480th sample after it, where FFmpeg's fresh synthesis holds only its own frames:
 
 | Fixture | RMS difference from mpg123 | Largest difference from mpg123 | RMS difference from FFmpeg | Largest difference from FFmpeg |
 | --- | --- | --- | --- | --- |
@@ -596,6 +640,9 @@ The MPEG-1 fixtures decode against the 32-bit float output of mpg123 1.33.7 and 
 | 64 kbit/s mono | 7.7e-8 | 7.1e-7 | 1.4e-7 | 1.1e-6 |
 | 128 kbit/s stereo with CRCs | 4.5e-8 | 3.0e-7 | 1.0e-7 | 1.1e-6 |
 | 400 kbit/s free format | 4.7e-8 | 3.2e-7 | Not decoded | Not decoded |
+| Layer II, 64 kbit/s joint stereo with CRCs | 2.2e-8 | 2.0e-7 | 1.1e-7 past its first frame | 9.9e-7 past its first frame |
+| Layer II, 96 kbit/s mono | 3.3e-8 | 5.3e-7 | 1.7e-7 | 1.5e-6 |
+| Layer II, MPEG-2 at 64 kbit/s | 2.4e-8 | 2.5e-7 | 2.2e-7 | 2.4e-6 |
 
 Full accuracy allows an RMS difference of 8.8e-6 and a largest difference of 6.1e-5, so each fixture sits about 100 times inside it. The difference from mpg123 is at the rounding of its 32-bit output. FFmpeg's float decoder computes in 32 bits, which doubles its difference.
 
@@ -619,6 +666,7 @@ Measured with `go test -bench` on an AMD Ryzen 9 7950X. The joint stereo fixture
 | Opening and decoding a whole stream | The joint stereo fixture | About 890 times faster than real time |
 | A seek, then reading the frame there | The joint stereo fixture, indexed | About 265 µs, mostly the 9 frames decoded before the sample |
 | A Layer I frame through every stage | Random stereo frames with samples in every subband | About 7.5 µs a frame of 384 samples |
+| A Layer II frame through every stage | Random stereo frames at 192 kbit/s | About 26 µs a frame of 1152 samples |
 
 ### Measured Changes
 

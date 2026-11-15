@@ -22,6 +22,7 @@ ISO's licence forbids redistributing the conformance bitstreams, so they are nev
 | Sieler and Sperschneider | Martin Sieler and Ralph Sperschneider, "MPEG-Layer3 Bitstream Syntax and Decoding", issue 1.2, 4 March 1997. <https://mp3guessenc.sourceforge.io/MPEG%20Layer3%20Bitstream%20Syntax%20and%20Decoding.pdf> | The Layer III syntax and decoding process for MPEG-1, MPEG-2 and MPEG-2.5, with all Layer III tables |
 | LAME info tag | "Mp3 Info Tag rev 1 specifications, draft 0". <http://gabriel.mp3-tech.org/mp3infotag.html> | The Xing and Info header and the LAME extension |
 | LAME technical FAQ | <https://lame.sourceforge.io/tech-FAQ.txt> | Encoder and decoder delays |
+| TwoLAME Layer II VBR notes | <https://www.twolame.org/doc/vbr.html> | ISO's bitrates for each Layer II allocation table, and the bitrates Layer II allows in each mode |
 | ID3v2.3 | <https://id3.org/id3v2.3.0> | ID3v2.3 tag header |
 | ID3v2.4 | <https://id3.org/id3v2.4.0-structure> | ID3v2.4 tag header and footer |
 | ID3v1 | <https://id3.org/ID3v1> | The 128-byte trailer |

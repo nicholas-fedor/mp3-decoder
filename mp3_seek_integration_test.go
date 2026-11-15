@@ -29,7 +29,10 @@ func TestSeek(t *testing.T) {
 
 	streams := map[string][]byte{"Layer I": layer1Stream(t, 30)}
 
-	for _, name := range []string{"mpeg1-joint.mp3", "mpeg1-mono.mp3", "protected.mp3", "free.mp3", "mpeg2.mp3", "mpeg25.mp3"} {
+	for _, name := range []string{
+		"mpeg1-joint.mp3", "mpeg1-mono.mp3", "protected.mp3", "free.mp3", "mpeg2.mp3", "mpeg25.mp3",
+		"layer2-joint.mp2", "layer2-mono.mp2", "layer2-mpeg2.mp2", "layer2-free.mp2",
+	} {
 		data, err := os.ReadFile("testdata/" + name)
 		require.NoError(t, err)
 

@@ -19,8 +19,6 @@ var (
 	stereoHead = mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer3, Bitrate: 9}
 	// lsfHead is an MPEG-2 Layer III header at 64 kbit/s.
 	lsfHead = mp3test.Header{Version: mp3test.MPEG2, Layer: mp3test.Layer3, Bitrate: 8}
-	// layer2Head is an MPEG-1 Layer II header at 112 kbit/s.
-	layer2Head = mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer2, Bitrate: 8}
 	// freeHead is an MPEG-1 Layer III free-format header.
 	freeHead = mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer3}
 )

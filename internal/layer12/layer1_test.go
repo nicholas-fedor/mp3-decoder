@@ -11,9 +11,9 @@ import (
 	"github.com/nicholas-fedor/mp3-decoder/internal/mp3test"
 )
 
-// TestReadAllocation checks that each allocation n gives samples of n+1 bits, that both channels
-// share the allocations from the bound on, and that the forbidden allocation is reported once all
-// the allocations are read.
+// TestReadAllocation checks that each allocation n gives samples of n+1 bits and 2^(n+1)-1 steps,
+// that both channels share the allocations from the bound on, and that the forbidden allocation is
+// reported once all the allocations are read.
 func TestReadAllocation(t *testing.T) {
 	t.Parallel()
 
@@ -29,9 +29,10 @@ func TestReadAllocation(t *testing.T) {
 
 	decoder.stream.Reset(head.Layer1Audio(&fields), 0)
 	assert.True(t, decoder.readAllocation(2, 4))
-	assert.Equal(t, [2]int{2, 15}, [2]int{decoder.widths[0][0], decoder.widths[1][0]})
-	assert.Equal(t, [2]int{0, 6}, [2]int{decoder.widths[0][3], decoder.widths[1][3]})
-	assert.Equal(t, [2]int{8, 8}, [2]int{decoder.widths[0][4], decoder.widths[1][4]})
+	assert.Equal(t, [2]int{2, 15}, [2]int{decoder.classes[0][0].bits, decoder.classes[1][0].bits})
+	assert.Equal(t, [2]int{0, 6}, [2]int{decoder.classes[0][3].bits, decoder.classes[1][3].bits})
+	assert.Equal(t, [2]int{8, 8}, [2]int{decoder.classes[0][4].bits, decoder.classes[1][4].bits})
+	assert.Equal(t, quantClass{steps: 32767, bits: 15, grouped: false}, decoder.classes[1][0])
 	assert.Equal(t, 4*(2*4+28), decoder.stream.Pos())
 
 	fields.Allocation[1][2] = 15
@@ -66,10 +67,10 @@ func TestReadSet(t *testing.T) {
 	decoder.readScalefactors(2)
 	decoder.readSet(2, 4)
 
-	assert.InDelta(t, -2*2.0/3, decoder.samples[0][0], 0)
-	assert.InDelta(t, 1*2.0/3, decoder.samples[1][0], 0)
-	assert.InDelta(t, 0.5*16383*2/32767.0, decoder.samples[0][4], 1e-16)
-	assert.InDelta(t, 0.25*16383*2/32767.0, decoder.samples[1][4], 1e-16)
-	assert.Zero(t, decoder.samples[0][1])
-	assert.Zero(t, decoder.samples[1][31])
+	assert.InDelta(t, -2*2.0/3, decoder.samples[0][0][0], 0)
+	assert.InDelta(t, 1*2.0/3, decoder.samples[0][1][0], 0)
+	assert.InDelta(t, 0.5*16383*2/32767.0, decoder.samples[0][0][4], 1e-16)
+	assert.InDelta(t, 0.25*16383*2/32767.0, decoder.samples[0][1][4], 1e-16)
+	assert.Zero(t, decoder.samples[0][0][1])
+	assert.Zero(t, decoder.samples[0][1][31])
 }

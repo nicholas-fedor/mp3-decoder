@@ -73,7 +73,12 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `layer12`: the Layer I CRC covering the bit allocation | libmad, layer12.c (mad_layer_I). The ISO/IEC 14496-26 conformance streams with CRCs |
 | `layer12`: Layer II allocation tables and quantization classes | Transcribed from FFmpeg, libavcodec/mpegaudiodata.c (ff_mpa_alloc_tables, ff_mpa_quant_steps and ff_mpa_quant_bits), LGPL-2.1-or-later. Every entry agrees with mpg123, src/libmpg123/l2tables.h, and libmad, layer12.c (sbquant_table, bitalloc_table, offset_table) and qc_table.dat |
 | `layer12`: the Layer II table for each bitrate per channel and sampling frequency | mpg123, src/libmpg123/layer2.c (II_select_table). FFmpeg, libavcodec/mpegaudio.c (ff_mpa_l2_select_table). libmad, layer12.c (mad_layer_II). ISO's bitrates for each table, as TwoLAME's notes on Layer II VBR quote them |
-| `frame`, `mp3`: the frames decoded before a Layer I seek's target, from the sets of subband samples the synthesis carries | The synthesis filterbank of this decoder |
+| `layer12`: Layer II allocations, scalefactor selections, scalefactors and granules, their order and the joint stereo bound | FFmpeg, libavcodec/mpegaudiodec_template.c (mp_decode_layer2). mpg123, src/libmpg123/layer2.c (II_step_one and II_step_two). libmad, layer12.c (mad_layer_II) |
+| `layer12`: Layer II ungrouping and requantization | libmad, layer12.c (II_samples) and qc_table.dat. FFmpeg, libavcodec/mpegaudiodec_template.c (l2_unscale_group) and libavcodec/mpegaudiodec_common.c (ff_division_tabs) |
+| `layer12`: a grouped word past three samples' codes giving 0 | mpg123, src/libmpg123/init_layer12.h (INT123_init_layer12) and src/libmpg123/l12tabs.h (grp_3tab, grp_5tab and grp_9tab) |
+| `layer12`: the Layer II CRC covering the allocations and selections | libmad, layer12.c (mad_layer_II). FFmpeg, libavcodec/mpegaudiodec_template.c (mp_decode_layer2). The ISO/IEC 14496-26 conformance streams with CRCs |
+| `layer12`: the free-format table chosen by the measured bitrate | A free-format stream from TwoLAME 0.4.0, checked against the same tone at a fixed bitrate |
+| `frame`, `mp3`: the frames decoded before a Layer I or Layer II seek's target, from the sets of subband samples the synthesis carries | The synthesis filterbank of this decoder |
 | `trig`: π and cosines | Machin's formula and the Taylor series of the cosine |
 
 No part adapts another decoder's code. The Huffman code tables and the synthesis window taps are data transcribed from FFmpeg.

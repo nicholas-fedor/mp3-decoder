@@ -17,8 +17,9 @@ import (
 )
 
 // TestStats checks the counts of a clean stream, of a damaged CRC, of junk between frames and of
-// a stream joined midway, and those of a clean Layer I stream, a damaged Layer I CRC and a Layer I
-// frame with the forbidden allocation.
+// a stream joined midway. It also checks those of a clean Layer II stream with CRCs and a damaged
+// Layer II CRC, then a clean Layer I stream, a damaged Layer I CRC and a Layer I frame with the
+// forbidden allocation.
 //
 // The underflows after junk or a join are the frames whose main data begins before it, as their
 // side information gives. Every frame of the fixture that LAME encoded with CRCs passes its CRC. A
@@ -33,6 +34,11 @@ func TestStats(t *testing.T) {
 
 	damaged := slices.Clone(protected)
 	damaged[starts[5]+frame.HeaderSize] ^= 0xff
+
+	layer2, layer2Starts := audioFrames(t, "layer2-joint.mp2")
+
+	layer2Damaged := slices.Clone(layer2)
+	layer2Damaged[layer2Starts[5]+frame.HeaderSize] ^= 0xff
 
 	layer1 := layer1Stream(t, 10)
 	layer1Size := len(layer1) / 10
@@ -60,6 +66,8 @@ func TestStats(t *testing.T) {
 		{"joined midway", joint[jointStarts[3]:], mp3.Stats{
 			Frames: int64(len(jointStarts) - 3), Underflows: reachingBefore(t, joint, jointStarts, 3),
 		}},
+		{"a clean Layer II stream with CRCs", layer2, mp3.Stats{Frames: int64(len(layer2Starts))}},
+		{"a damaged Layer II CRC", layer2Damaged, mp3.Stats{Frames: int64(len(layer2Starts)), CRCMismatches: 1}},
 		{"a clean Layer I stream", layer1, mp3.Stats{Frames: 10}},
 		{"a damaged Layer I CRC", layer1Damaged, mp3.Stats{Frames: 10, CRCMismatches: 1}},
 		{"a forbidden Layer I allocation", layer1Forbidden, mp3.Stats{Frames: 10, CRCMismatches: 1, Undecodable: 1}},
@@ -78,6 +86,8 @@ func TestStats(t *testing.T) {
 			switch tt.name {
 			case "a damaged CRC":
 				assert.True(t, slices.Equal(decodeBytes(t, protected), samples), "the samples change")
+			case "a damaged Layer II CRC":
+				assert.True(t, slices.Equal(decodeBytes(t, layer2), samples), "the samples change")
 			case "a damaged Layer I CRC":
 				assert.True(t, slices.Equal(decodeBytes(t, layer1), samples), "the samples change")
 			case "a forbidden Layer I allocation":

@@ -46,3 +46,36 @@ func BenchmarkDecode(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkDecodeLayer2 measures decoding stereo Layer II frames at 192 kbit/s and 44.1 kHz, whose
+// random bytes select classes at random in each of the 30 subbands.
+func BenchmarkDecodeLayer2(b *testing.B) {
+	random := rand.New(rand.NewPCG(3, 4))
+	head := mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer2, Bitrate: 10, Mode: mp3test.Stereo}
+
+	parsed, ok := frame.Parse(head.Bytes())
+	require.True(b, ok)
+
+	frames := make([][]byte, 8)
+
+	for at := range frames {
+		frames[at] = head.Frame(parsed.Size())
+
+		for byteAt := parsed.DataAt(); byteAt < len(frames[at]); byteAt++ {
+			frames[at][byteAt] = byte(random.Uint32())
+		}
+	}
+
+	var decoder layer12.Decoder
+
+	pcm := make([][2]float64, frame.MaxSamples)
+
+	b.ReportAllocs()
+
+	for b.Loop() {
+		for _, data := range frames {
+			_, err := decoder.Decode(pcm, parsed, data)
+			require.NoError(b, err)
+		}
+	}
+}

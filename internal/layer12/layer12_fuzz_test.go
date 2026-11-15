@@ -15,12 +15,13 @@ import (
 	"github.com/nicholas-fedor/mp3-decoder/internal/mp3test"
 )
 
-// FuzzDecode decodes a Layer I frame of any bytes, twice in a row, in any mode and with or
-// without a CRC.
+// FuzzDecode decodes a Layer I or Layer II frame of any bytes, twice in a row, in any mode, at any
+// bitrate of either version and with or without a CRC.
 //
-// It checks that the frame decodes or fails with [layer12.ErrAllocation], that every sample is
-// finite, and that a mono frame gives each sample to both channels. The seed corpus holds a frame
-// of random fields in each mode, a frame with the forbidden allocation, and an empty frame.
+// It checks that a Layer I frame decodes or fails with [layer12.ErrAllocation] and a Layer II frame
+// decodes, that every sample is finite, and that a mono frame gives each sample to both channels.
+// The seed corpus holds a Layer I frame of random fields in each mode, a frame with the forbidden
+// allocation, an empty frame, and Layer II frames of random bytes at several bitrates.
 func FuzzDecode(f *testing.F) {
 	random := rand.New(rand.NewPCG(1, 2))
 
@@ -28,16 +29,33 @@ func FuzzDecode(f *testing.F) {
 		fields := mp3test.RandomLayer1Audio(random, 14)
 		head := mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer1, Mode: uint32(mode), Extension: uint32(mode)}
 
-		f.Add(head.Layer1Audio(&fields), mode, mode, mode%2 == 0)
+		f.Add(head.Layer1Audio(&fields), mode, mode, uint8(14), mode%2 == 0, false, false)
 	}
 
-	f.Add([]byte{0xf0}, uint8(mp3test.Mono), uint8(0), false)
-	f.Add([]byte{}, uint8(mp3test.Stereo), uint8(0), true)
+	f.Add([]byte{0xf0}, uint8(mp3test.Mono), uint8(0), uint8(14), false, false, false)
+	f.Add([]byte{}, uint8(mp3test.Stereo), uint8(0), uint8(14), true, false, false)
 
-	f.Fuzz(func(t *testing.T, audio []byte, mode, extension uint8, protected bool) {
+	for _, bitrate := range []uint8{4, 8, 10, 14} {
+		audio := make([]byte, 600)
+		for at := range audio {
+			audio[at] = byte(random.Uint32())
+		}
+
+		f.Add(audio, bitrate%4, bitrate%4, bitrate, bitrate == 8, true, bitrate == 4)
+	}
+
+	f.Fuzz(func(t *testing.T, audio []byte, mode, extension, bitrate uint8, protected, layer2, lower bool) {
 		head := mp3test.Header{
-			Version: mp3test.MPEG1, Layer: mp3test.Layer1, Bitrate: 14, Mode: uint32(mode % 4),
+			Version: mp3test.MPEG1, Layer: mp3test.Layer1, Bitrate: uint32(bitrate%14 + 1), Mode: uint32(mode % 4),
 			Extension: uint32(extension % 4), Protected: protected,
+		}
+
+		if layer2 {
+			head.Layer = mp3test.Layer2
+		}
+
+		if lower {
+			head.Version = mp3test.MPEG2
 		}
 
 		parsed, ok := frame.Parse(head.Bytes())
@@ -51,12 +69,13 @@ func FuzzDecode(f *testing.F) {
 		for range 2 {
 			_, err := decoder.Decode(pcm, parsed, data)
 			if err != nil {
+				require.False(t, layer2)
 				require.ErrorIs(t, err, layer12.ErrAllocation)
 
 				continue
 			}
 
-			for at, pair := range pcm[:mp3test.Layer1Sets*mp3test.Subbands] {
+			for at, pair := range pcm[:parsed.Samples()] {
 				require.False(t, math.IsNaN(pair[0]) || math.IsInf(pair[0], 0), "sample %d", at)
 				require.False(t, math.IsNaN(pair[1]) || math.IsInf(pair[1], 0), "sample %d", at)
 

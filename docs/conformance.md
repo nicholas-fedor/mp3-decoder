@@ -57,9 +57,9 @@ The test also hashes the samples it decodes from each stream, and the results re
 The conformance test records these results and the census below. Run it with `-update` and `MP3_DECODER_CONFORMANCE` set to rewrite them, and without `-update` it fails when any result changes.
 
 <!-- results start -->
-49 of 65 streams decode at full accuracy.
+65 of 65 streams decode at full accuracy.
 
-The decoded samples of all 65 streams hash to `66bbe77dfca80ccb348eaff56790a4fecffb87fae5db95e9d5145d5df9a4da33`.
+The decoded samples of all 65 streams hash to `605da93ef6e12593be95fe3f23e3daeb852901ac83e2259a5d4f94b6942bdb26`.
 
 | Stream | Reference | Channel | RMS | Largest | Result |
 | --- | --- | --- | --- | --- | --- |
@@ -78,24 +78,38 @@ The decoded samples of all 65 streams hash to `66bbe77dfca80ccb348eaff56790a4fec
 | l1_fl7 | l1_fl7 | right | 3.4e-08 | 6.0e-08 | full accuracy |
 | l1_fl8 | l1_fl8 | left | 3.4e-08 | 6.0e-08 | full accuracy |
 | l1_fl8 | l1_fl8 | right | 3.4e-08 | 6.0e-08 | full accuracy |
-| l2_fl10 | l2_fl10 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_fl11 | l2_fl11 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_fl12 | l2_fl12 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_fl13 | l2_fl13 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_fl14 | l2_fl14 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_fl15 | l2_fl15 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_fl16 | l2_fl16 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_test24 | l2_test24 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_test25 | l2_test25 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_test26 | l2_test26 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_test28 | l2_test28 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_test29 | l2_test29 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_test30 | l2_test30 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_test31 | l2_test31 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
-| l2_test32 | l2_test32 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
+| l2_fl10 | l2_fl10 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_fl10 | l2_fl10 | right | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_fl11 | l2_fl11 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_fl11 | l2_fl11 | right | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_fl12 | l2_fl12 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_fl12 | l2_fl12 | right | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_fl13 | l2_fl13 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_fl14 | l2_fl14 | left | 3.5e-08 | 6.0e-08 | full accuracy |
+| l2_fl14 | l2_fl14 | right | 3.5e-08 | 6.1e-08 | full accuracy |
+| l2_fl15 | l2_fl15 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_fl15 | l2_fl15 | right | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_fl16 | l2_fl16 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_fl16 | l2_fl16 | right | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test24 | l2_test24 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test24 | l2_test24 | right | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test25 | l2_test25 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test25 | l2_test25 | right | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test26 | l2_test26 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test26 | l2_test26 | right | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test28 | l2_test28 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test28 | l2_test28 | right | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test29 | l2_test29 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test29 | l2_test29 | right | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test30 | l2_test30 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test31 | l2_test31 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test31 | l2_test31 | right | 3.4e-08 | 6.1e-08 | full accuracy |
+| l2_test32 | l2_test32 | left | 3.4e-08 | 6.1e-08 | full accuracy |
+| l2_test32 | l2_test32 | right | 3.5e-08 | 6.0e-08 | full accuracy |
 | l2_test33 | l2_test33 | left | 3.4e-08 | 6.0e-08 | full accuracy |
 | l2_test33 | l2_test33 | right | 3.4e-08 | 6.0e-08 | full accuracy |
-| l2_test34 | l2_test34 | | | | not opened, with the error "mp3: Layer II streams are not decoded" |
+| l2_test34 | l2_test34 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l2_test34 | l2_test34 | right | 3.4e-08 | 6.0e-08 | full accuracy |
 | l3_10101 | l3_10101 | left | 3.5e-08 | 8.7e-08 | full accuracy |
 | l3_10102 | l3_10102 | left | 3.5e-08 | 8.7e-08 | full accuracy |
 | l3_10103 | l3_10103 | left | 3.5e-08 | 8.7e-08 | full accuracy |

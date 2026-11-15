@@ -22,9 +22,10 @@ import (
 // FuzzRead opens and decodes any bytes as a stream, and checks that decoding ends, that every
 // sample is a number, and that no more samples come out than frames fit the bytes.
 //
-// The seed corpus holds the first frames of each MPEG-1 fixture, which the fuzzer damages.
+// The seed corpus holds the first frames of each MPEG-1 Layer III fixture and of the Layer II
+// fixtures in joint stereo and of the lower sampling frequencies, which the fuzzer damages.
 func FuzzRead(f *testing.F) {
-	for _, name := range []string{"mpeg1-joint.mp3", "mpeg1-mono.mp3", "protected.mp3"} {
+	for _, name := range []string{"mpeg1-joint.mp3", "mpeg1-mono.mp3", "protected.mp3", "layer2-joint.mp2", "layer2-mpeg2.mp2"} {
 		data, err := os.ReadFile("testdata/" + name)
 		require.NoError(f, err)
 

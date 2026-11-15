@@ -64,7 +64,6 @@ func TestOpenStreamErrors(t *testing.T) {
 		canceled bool
 	}{
 		{bytes.NewReader(bytes.Repeat([]byte{0xff}, 5000)), ErrNoFrames, "no frames", false},
-		{bytes.NewReader(frames(layer2Head, 3)), ErrLayer, "Layer II", false},
 		{bytes.NewReader(frames(stereoHead, 3)), context.Canceled, "canceled", true},
 		{iotest.ErrReader(errSource), errSource, "failing source", false},
 		{bytes.NewReader(mp3test.ID3v2{Body: 3 * readSize}.Bytes()[:100]), ErrNoFrames, "a tag longer than the stream", false},
@@ -203,7 +202,6 @@ func TestOpenErrors(t *testing.T) {
 		{&failingReader{Reader: bytes.NewReader(long), reads: 100}, errSource, "the read of the tail", false},
 		{&failingReader{Reader: bytes.NewReader(long), reads: len(long) + readSize + 100}, errSource, "a read in the walk", false},
 		{bytes.NewReader(bytes.Repeat([]byte{0xff}, 5000)), ErrNoFrames, "no frames", false},
-		{bytes.NewReader(frames(layer2Head, 3)), ErrLayer, "Layer II", false},
 		{bytes.NewReader(long), context.Canceled, "canceled", true},
 	}
 

@@ -18,14 +18,16 @@ type Layer1Audio struct {
 	Samples [Layer1Sets][2][Subbands]uint32
 }
 
-// layer1Layout is the layout of a Layer I frame's audio data in one mode.
-type layer1Layout struct {
-	// fields holds the fields written.
-	fields *Layer1Audio
+// audioLayout is the layout of a Layer I or Layer II frame's audio data in one mode.
+type audioLayout struct {
+	// allocations holds the allocations written.
+	allocations *[2][Subbands]uint32
 	// channels is the number of channels.
 	channels int
 	// bound is the first subband whose allocation and samples both channels share.
 	bound int
+	// subbands is the number of subbands the frame codes.
+	subbands int
 }
 
 // Layer I layout.
@@ -56,15 +58,7 @@ const (
 // Returns:
 //   - []byte: the audio data, padded with zeros to a whole byte.
 func (h Header) Layer1Audio(fields *Layer1Audio) []byte {
-	lay := layer1Layout{fields: fields, channels: len(fields.Allocation), bound: Subbands}
-
-	switch h.Mode {
-	case Mono:
-		lay.channels = 1
-	case JointStereo:
-		lay.bound = boundStep * (int(h.Extension) + 1)
-	default:
-	}
+	lay := h.layout(&fields.Allocation, Subbands)
 
 	var writer BitWriter
 
@@ -91,6 +85,28 @@ func (h Header) Layer1Audio(fields *Layer1Audio) []byte {
 	return writer.Bytes()
 }
 
+// layout returns the layout of a frame's audio data in the header's mode.
+//
+// Parameters:
+//   - allocations: the allocations written.
+//   - subbands: the number of subbands the frame codes.
+//
+// Returns:
+//   - audioLayout: the layout.
+func (h Header) layout(allocations *[2][Subbands]uint32, subbands int) audioLayout {
+	lay := audioLayout{allocations: allocations, channels: len(allocations), bound: Subbands, subbands: subbands}
+
+	switch h.Mode {
+	case Mono:
+		lay.channels = 1
+	case JointStereo:
+		lay.bound = boundStep * (int(h.Extension) + 1)
+	default:
+	}
+
+	return lay
+}
+
 // allocation returns the allocation a channel takes for a subband, the first channel's from the
 // bound on.
 //
@@ -100,12 +116,12 @@ func (h Header) Layer1Audio(fields *Layer1Audio) []byte {
 //
 // Returns:
 //   - uint32: the allocation.
-func (l layer1Layout) allocation(ch, sb int) uint32 {
+func (l audioLayout) allocation(ch, sb int) uint32 {
 	if sb < l.bound {
-		return l.fields.Allocation[ch][sb]
+		return l.allocations[ch][sb]
 	}
 
-	return l.fields.Allocation[0][sb]
+	return l.allocations[0][sb]
 }
 
 // carried reports whether the frame carries a channel's own allocation and samples for a
@@ -117,16 +133,16 @@ func (l layer1Layout) allocation(ch, sb int) uint32 {
 //
 // Returns:
 //   - bool: whether the frame carries them.
-func (l layer1Layout) carried(ch, sb int) bool {
+func (l audioLayout) carried(ch, sb int) bool {
 	return sb < l.bound || ch == 0
 }
 
-// each calls a function for each subband, and within it for each channel.
+// each calls a function for each subband the frame codes, and within it for each channel.
 //
 // Parameters:
 //   - visit: the function, given the channel and the subband.
-func (l layer1Layout) each(visit func(ch, sb int)) {
-	for sb := range Subbands {
+func (l audioLayout) each(visit func(ch, sb int)) {
+	for sb := range l.subbands {
 		for ch := range l.channels {
 			visit(ch, sb)
 		}
