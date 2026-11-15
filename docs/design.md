@@ -46,6 +46,7 @@ This document explains how the decoder is built and why, part by part. Each sect
   - [Reordering](#reordering)
   - [Hybrid Filterbank](#hybrid-filterbank)
     - [Stages](#stages)
+    - [Fast IMDCT](#fast-imdct)
     - [Mixed Blocks at 8 kHz](#mixed-blocks-at-8-khz)
     - [Mixed Start and Stop Blocks](#mixed-start-and-stop-blocks)
     - [Channel Changes](#channel-changes)
@@ -341,7 +342,19 @@ FFmpeg, Symphonia and dist10 reorder in a pass of their own after stereo, and mp
 | Overlap-add | The first half of each block adds to the second half of the subband's block before |
 | Frequency inversion | Every odd sample of every odd subband is negated |
 
-The IMDCT is computed directly from its definition, a sum of 18 or 6 products for each sample.
+#### Fast IMDCT
+
+An IMDCT of 2n lines gives 4n samples, 36 from 18 for long blocks and 12 from 6 for short blocks. Sample i is the sum over the lines X(k) of X(k) cos(π/(8n) (2i+1+2n)(2k+1)). Those angles fold onto the DCT-IV of the lines, c(j), the sum over k of X(k) cos(π/(8n) (2j+1)(2k+1)):
+
+| Samples | Value |
+| --- | --- |
+| i below n | c(n+i) |
+| i from n to 3n-1 | -c(3n-1-i) |
+| i from 3n on | -c(i-3n) |
+
+The DCT-IV comes from a DCT-II of the same length. Since 2 cos(α) cos(β) is cos(β-α) + cos(β+α), the lines scaled by 1/(2 cos(π(2k+1)/(8n))) have a DCT-II D with c(j) = D(j) + D(j+1), where D(2n) is 0. Byeong Gi Lee's split, as in [Fast Matrixing](#fast-matrixing), turns that DCT-II into two of n points, 9 for long blocks and 3 for short blocks, which are summed directly. A long block takes 189 products instead of 648, and a short window 27 instead of 72. The direct sums stay in the tests as the oracles.
+
+The scaling reaches 11.5 for long blocks, so the fast form rounds a little more. Against an exact sum, the largest error of a long block is 8.7e-15 and of a short block 3.1e-15. That is about 4 million times below the 24-bit noise floor, and no conformance stream's RMS or maximum difference changed in its recorded digits.
 
 #### Mixed Blocks at 8 kHz
 
@@ -366,7 +379,7 @@ A stream may change between mono and stereo from one frame to the next. Both cha
 
 #### Exact Transform Tables
 
-The alias butterflies, the windows and the IMDCT cosines are generated into `filterbank_gen.go`. Every angle is a multiple of π/72, and the published coefficients C are parsed as exact decimals. A forward MDCT in the tests encodes random subband signals through long, start, short and stop blocks, and the filterbank gives them back to within 1e-12.
+The alias butterflies, the windows and the IMDCT's factors and cosines are generated into `filterbank_gen.go`. Every angle is a multiple of π/72, and the published coefficients C are parsed as exact decimals. A forward MDCT in the tests encodes random subband signals through long, start, short and stop blocks, and the filterbank gives them back to within 1e-12.
 
 ### Polyphase Synthesis
 
@@ -521,8 +534,8 @@ Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates, and 
 | Requantization | A 128 kbit/s LAME file | About 130 ns a granule of one channel |
 | Stereo | A 128 kbit/s LAME joint stereo file | About 230 ns a granule of both channels |
 | Reordering | A granule of short blocks | About 310 ns |
-| Hybrid filterbank, with the direct IMDCT | Random lines | About 5.9 µs a granule of long blocks, and 3.8 µs of short blocks |
+| Hybrid filterbank, with the fast IMDCT | Random lines | About 3.2 µs a granule of long blocks, and 2.9 µs of short blocks, from 5.9 µs and 3.8 µs with the direct sums |
 | Polyphase synthesis, with the fast DCT | Random subband samples | About 7.0 µs a granule of one channel, from 19 µs with direct matrixing |
-| A frame through every stage | A 128 kbit/s LAME joint stereo file | About 54 µs a frame |
-| Opening and decoding a whole stream | A 128 kbit/s LAME joint stereo file | About 420 times faster than real time |
-| A seek, then reading the frame there | A 128 kbit/s LAME joint stereo file, indexed | About 560 µs, mostly the 9 frames decoded before the sample |
+| A frame through every stage | A 128 kbit/s LAME joint stereo file | About 45 µs a frame |
+| Opening and decoding a whole stream | A 128 kbit/s LAME joint stereo file | About 510 times faster than real time |
+| A seek, then reading the frame there | A 128 kbit/s LAME joint stereo file, indexed | About 470 µs, mostly the 9 frames decoded before the sample |

@@ -59,7 +59,7 @@ The conformance test records these results and the census below. Run it with `-u
 <!-- results start -->
 40 of 40 streams decode at full accuracy.
 
-The decoded samples of all 40 streams hash to `e4c5ab87b1fdcc1c3304113c3a2bdae78dd410c42e2620d19065209ba20283dd`.
+The decoded samples of all 40 streams hash to `c9be9622744b823a36ac20d1d0010261ba9329192d2e6a832cb5571842db8a1e`.
 
 | Stream | Reference | Channel | RMS | Largest | Result |
 | --- | --- | --- | --- | --- | --- |

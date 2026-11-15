@@ -26,6 +26,8 @@ func BenchmarkTransform(b *testing.B) {
 
 			lines := randomLines(rand.New(rand.NewPCG(33, 34)))
 
+			b.ReportAllocs()
+
 			for b.Loop() {
 				in := lines
 				bank.Transform(&out, &in, bench.block)

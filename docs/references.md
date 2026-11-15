@@ -51,8 +51,4 @@ ISO's licence forbids redistributing the conformance bitstreams, so they are nev
 
 | Name | Document | Role |
 | --- | --- | --- |
-| B. G. Lee 1984 | Byeong Gi Lee, "A new algorithm to compute the discrete cosine transform", IEEE Transactions on Acoustics, Speech, and Signal Processing 32(6), 1984. doi:10.1109/TASSP.1984.1164443 | Fast DCT for the synthesis filterbank |
-| Konstantinides 1994 | K. Konstantinides, "Fast subband filtering in MPEG audio coding", IEEE Signal Processing Letters 1(2), 1994. doi:10.1109/97.300309 | Synthesis matrixing as a DCT |
-| S.-W. Lee 2001 | Szu-Wei Lee, "Improved algorithm for efficient computation of the forward and backward MDCT in MPEG audio coder", IEEE Transactions on Circuits and Systems II 48(10), 2001. doi:10.1109/82.974789 | Fast IMDCT |
-| Britanak and Rao 2001 | V. Britanak and K. R. Rao, "An efficient implementation of the forward and inverse MDCT in MPEG audio coding", IEEE Signal Processing Letters 8(2), 2001. doi:10.1109/97.895372 | Fast IMDCT |
-| Britanak 2011 | V. Britanak, "A survey of efficient MDCT implementations in MP3 audio coding standard", Signal Processing 91(4), 2011. doi:10.1016/j.sigpro.2010.09.009 | Survey of IMDCT algorithms |
+| B. G. Lee 1984 | Byeong Gi Lee, "A new algorithm to compute the discrete cosine transform", IEEE Transactions on Acoustics, Speech, and Signal Processing 32(6), 1984. doi:10.1109/TASSP.1984.1164443 | Fast DCT for the synthesis filterbank and the IMDCT |

@@ -24,11 +24,15 @@ import (
 // tables holds every generated table.
 type tables struct {
 	longWindows  [3][longPoints]float64
-	longCosines  [longPoints][Samples]float64
-	shortCosines [shortPoints][shortPoints / 2]float64
+	longCosines  [longTerms * longTerms]float64
+	longScale    [2 * longTerms]float64
 	shortWindow  [shortPoints]float64
+	longSplit    [longTerms]float64
+	shortCosines [shortTerms * shortTerms]float64
 	aliasCs      [aliasButterflies]float64
 	aliasCa      [aliasButterflies]float64
+	shortScale   [2 * shortTerms]float64
+	shortSplit   [shortTerms]float64
 }
 
 // Hybrid test constants.
@@ -80,7 +84,11 @@ func TestHybridTables(t *testing.T) {
 	assert.Equal(t, want.aliasCa, aliasCa)
 	assert.Equal(t, want.longWindows, longWindows)
 	assert.Equal(t, want.shortWindow, shortWindow)
+	assert.Equal(t, want.longScale, longScale)
+	assert.Equal(t, want.longSplit, longSplit)
 	assert.Equal(t, want.longCosines, longCosines)
+	assert.Equal(t, want.shortScale, shortScale)
+	assert.Equal(t, want.shortSplit, shortSplit)
 	assert.Equal(t, want.shortCosines, shortCosines)
 
 	for i, published := range publishedAlias {
@@ -103,9 +111,21 @@ func TestHybridTables(t *testing.T) {
 		assert.InDelta(t, 1, shortWindow[i]*shortWindow[i]+shortWindow[i+shortStep]*shortWindow[i+shortStep], 1e-15, "sample %d", i)
 	}
 
-	for i, row := range longCosines {
-		for k, cosine := range row {
-			assert.InDelta(t, math.Cos(math.Pi/72*float64((2*i+19)*(2*k+1)%144)), cosine, 1e-15, "%d %d", i, k)
+	for _, transform := range []cosineTransform{longTransform, shortTransform} {
+		terms := len(transform.split)
+
+		// Each factor and its cosine round once, so their product is 1/2 within two roundings.
+		for k, scale := range transform.scale {
+			assert.InDelta(t, 0.5, scale*trig.Cos(2*k+1, 8*terms), 2.3e-16, "%d terms, scale %d", terms, k)
+		}
+
+		for k, split := range transform.split {
+			assert.InDelta(t, 0.5, split*trig.Cos(2*k+1, 4*terms), 2.3e-16, "%d terms, split %d", terms, k)
+		}
+
+		for at, cosine := range transform.cosines {
+			angle := math.Pi * float64(at/terms*(2*(at%terms)+1)%(4*terms)) / float64(2*terms)
+			assert.InDelta(t, math.Cos(angle), cosine, 1e-15, "%d terms, cosine %d", terms, at)
 		}
 	}
 }
@@ -279,21 +299,35 @@ func closedTables() tables {
 		}
 
 		out.longWindows[Stop][longPoints-1-i] = out.longWindows[Start][i]
-
-		for k := range Samples {
-			out.longCosines[i][k] = trig.Cos((2*i+19)*(2*k+1), 72)
-		}
 	}
 
 	for i := range shortPoints {
 		out.shortWindow[i] = trig.Sin(2*i+1, 24)
-
-		for k := range shortPoints / 2 {
-			out.shortCosines[i][k] = trig.Cos((2*i+7)*(2*k+1), 24)
-		}
 	}
 
+	closedTransform(out.longScale[:], out.longSplit[:], out.longCosines[:])
+	closedTransform(out.shortScale[:], out.shortSplit[:], out.shortCosines[:])
+
 	return out
+}
+
+// closedTransform computes the tables of an IMDCT of 2n lines, whose n is the number of splits.
+func closedTransform(scale, split, cosines []float64) {
+	terms := len(split)
+
+	for k := range scale {
+		scale[k] = trig.Sec(2*k+1, 8*terms) / 2
+	}
+
+	for k := range split {
+		split[k] = trig.Sec(2*k+1, 4*terms) / 2
+	}
+
+	for m := range terms {
+		for k := range terms {
+			cosines[terms*m+k] = trig.Cos(m*(2*k+1), 2*terms)
+		}
+	}
 }
 
 // rounded returns a closed form rounded to the nearest float64.
@@ -348,28 +382,30 @@ func hybridSource(t *testing.T, out *tables) []byte {
 	b.WriteString("var shortWindow = [shortPoints]float64{\n")
 	row(out.shortWindow[:])
 	b.WriteString("}\n\n")
-	b.WriteString("// longCosines holds cos(π/72 (2i+19)(2k+1)) of the long block IMDCT at [i][k], rounded to the\n")
-	b.WriteString("// nearest float64.\n")
-	b.WriteString("var longCosines = [longPoints][Samples]float64{\n")
+	transform := func(name, size string, terms int, scale, split, cosines []float64) {
+		fmt.Fprintf(&b, "// %sScale holds 1/(2 cos(π(2k+1)/%d)) for each line of the %s block IMDCT, rounded to the\n", name, 8*terms, name)
+		b.WriteString("// nearest float64.\n")
+		fmt.Fprintf(&b, "var %sScale = [2 * %s]float64{\n", name, size)
+		row(scale)
+		b.WriteString("}\n\n")
+		fmt.Fprintf(&b, "// %sSplit holds 1/(2 cos(π(2k+1)/%d)) for each difference of the %s block IMDCT, rounded\n", name, 4*terms, name)
+		b.WriteString("// to the nearest float64.\n")
+		fmt.Fprintf(&b, "var %sSplit = [%s]float64{\n", name, size)
+		row(split)
+		b.WriteString("}\n\n")
+		fmt.Fprintf(&b, "// %sCosines holds cos(π m(2k+1)/%d) of the %d-point DCTs of the %s block IMDCT at\n", name, 2*terms, terms, name)
+		fmt.Fprintf(&b, "// %d*m+k, rounded to the nearest float64.\n", terms)
+		fmt.Fprintf(&b, "var %sCosines = [%s * %s]float64{\n", name, size, size)
 
-	for _, cosines := range out.longCosines {
-		b.WriteString("{\n")
-		row(cosines[:])
-		b.WriteString("},\n")
+		for at := 0; at < len(cosines); at += terms {
+			row(cosines[at : at+terms])
+		}
+
+		b.WriteString("}\n\n")
 	}
 
-	b.WriteString("}\n\n")
-	b.WriteString("// shortCosines holds cos(π/24 (2i+7)(2k+1)) of the short block IMDCT at [i][k], rounded to the\n")
-	b.WriteString("// nearest float64.\n")
-	b.WriteString("var shortCosines = [shortPoints][shortPoints / 2]float64{\n")
-
-	for _, cosines := range out.shortCosines {
-		b.WriteString("{\n")
-		row(cosines[:])
-		b.WriteString("},\n")
-	}
-
-	b.WriteString("}\n")
+	transform("long", "longTerms", longTerms, out.longScale[:], out.longSplit[:], out.longCosines[:])
+	transform("short", "shortTerms", shortTerms, out.shortScale[:], out.shortSplit[:], out.shortCosines[:])
 
 	source, err := format.Source(b.Bytes())
 	require.NoError(t, err)
