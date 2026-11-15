@@ -17,8 +17,8 @@ const (
 
 // CheckCRC reports whether the CRC of the frame that h heads matches the bits it covers.
 //
-// The CRC covers the last two header bytes and the first bits after the CRC. For Layer III those
-// bits are the side information. A frame without a CRC passes.
+// The CRC covers the last two header bytes and the first bits after the CRC. In Layer I those bits
+// are the bit allocation, and in Layer III the side information. A frame without a CRC passes.
 //
 // Parameters:
 //   - frame: the frame's bytes from its header onward.

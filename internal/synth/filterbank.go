@@ -17,6 +17,14 @@ type Filterbank struct {
 	newest int
 }
 
+// Filterbanks holds the polyphase synthesis filterbank of each channel of a stream.
+type Filterbanks struct {
+	// Channel holds each channel's filterbank.
+	Channel [2]Filterbank
+	// channels is the number of channels of the frame before, or 0 before the first.
+	channels int
+}
+
 // Filterbank sizes.
 const (
 	// Subbands is the number of polyphase subbands, and the number of PCM samples each set of
@@ -33,6 +41,29 @@ const (
 	// dctFactors is the number of factors the 32-point DCT takes, 16 + 8 + 4 + 2 + 1.
 	dctFactors = Subbands - 1
 )
+
+// Follow readies the filterbanks for a frame, and reports whether it started them afresh.
+//
+// A frame with another number of channels than the frame before it starts both filterbanks afresh,
+// as a new stream would.
+//
+// Parameters:
+//   - channels: the frame's number of channels.
+//
+// Returns:
+//   - bool: whether both filterbanks started afresh.
+func (f *Filterbanks) Follow(channels int) bool {
+	restart := f.channels != 0 && f.channels != channels
+	if restart {
+		for ch := range f.Channel {
+			f.Channel[ch].Reset()
+		}
+	}
+
+	f.channels = channels
+
+	return restart
+}
 
 // Reset forgets the history, as at the start of a stream.
 func (f *Filterbank) Reset() {

@@ -162,6 +162,35 @@ func TestReset(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+// TestFollow checks that the filterbanks start afresh only when the number of channels changes,
+// and not for the first frame.
+func TestFollow(t *testing.T) {
+	t.Parallel()
+
+	rng := rand.New(rand.NewPCG(47, 48))
+
+	var (
+		banks, fresh Filterbanks
+		got, want    [Subbands]float64
+	)
+
+	assert.False(t, banks.Follow(2))
+
+	samples := randomSamples(rng)
+	banks.Channel[1].Synthesize(&got, &samples)
+
+	assert.False(t, banks.Follow(2))
+	assert.NotEqual(t, fresh.Channel, banks.Channel)
+	assert.True(t, banks.Follow(1))
+	assert.Equal(t, fresh.Channel, banks.Channel)
+
+	banks.Channel[0].Synthesize(&got, &samples)
+	fresh.Channel[0].Synthesize(&want, &samples)
+	assert.Equal(t, want, got)
+	assert.False(t, banks.Follow(1))
+	assert.True(t, banks.Follow(2))
+}
+
 // randomSamples returns subband samples between -1 and 1.
 func randomSamples(rng *rand.Rand) [Subbands]float64 {
 	var samples [Subbands]float64

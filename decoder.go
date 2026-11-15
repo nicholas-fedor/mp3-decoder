@@ -12,6 +12,7 @@ import (
 
 	"github.com/nicholas-fedor/mp3-decoder/container"
 	"github.com/nicholas-fedor/mp3-decoder/frame"
+	"github.com/nicholas-fedor/mp3-decoder/internal/layer12"
 	"github.com/nicholas-fedor/mp3-decoder/internal/layer3"
 )
 
@@ -21,18 +22,20 @@ type Decoder struct {
 	pending [][2]float64
 	// scanner finds the stream's frames.
 	scanner scanner
-	// layer3 decodes the frames.
+	// layer12 decodes the frames of a Layer I stream.
+	layer12 layer12.Decoder
+	// layer3 decodes the frames of a Layer III stream.
 	layer3 layer3.Decoder
 	// pcm holds the samples of the frame decoded last.
 	pcm [frame.MaxSamples][2]float64
-	// cut holds a last frame that the stream ends inside, with zeros for the bytes it lacks.
-	cut [frame.MaxSize]byte
 	// stats counts what decoding has met.
 	stats Stats
 	// padding holds the samples the encoder added, which are left out.
 	padding encoderPadding
 	// length is the number of samples the stream decodes to, when known.
 	length int64
+	// cut holds a last frame that the stream ends inside, with zeros for the bytes it lacks.
+	cut [frame.MaxSize]byte
 	// known reports whether length is known.
 	known bool
 }
@@ -59,25 +62,19 @@ type Stats struct {
 	// Underflows is the number of frames whose main data began before the bytes the decoder held,
 	// which give silence.
 	Underflows int64
-	// Undecodable is the number of frames whose side information holds a value no encoder writes,
-	// which give silence.
+	// Undecodable is the number of frames that hold a value no encoder writes, which give silence.
 	Undecodable int64
 }
 
-// Decoding sizes.
-const (
-	// tailSize is the most bytes at the end of a file searched for the tags after its audio.
-	tailSize = 64 << 10
-	// byteBits is the number of bits in a byte.
-	byteBits = 8
-)
+// tailSize is the most bytes at the end of a file searched for the tags after its audio.
+const tailSize = 64 << 10
 
 // Errors from opening a stream.
 var (
 	// ErrNoFrames is returned for a stream in which no frame is found.
 	ErrNoFrames = errors.New("mp3: no frames found")
-	// ErrLayer is returned for a stream of Layer I or Layer II frames.
-	ErrLayer = errors.New("mp3: only Layer III streams are decoded")
+	// ErrLayer is returned for a stream of Layer II frames.
+	ErrLayer = errors.New("mp3: Layer II streams are not decoded")
 )
 
 // Errors from seeking.
@@ -167,7 +164,7 @@ func OpenStream(ctx context.Context, src io.Reader) (*Decoder, error) {
 		return nil, err
 	}
 
-	if decoder.scanner.first.Layer != frame.Layer3 {
+	if decoder.scanner.first.Layer == frame.Layer2 {
 		return nil, ErrLayer
 	}
 
@@ -283,6 +280,7 @@ func (d *Decoder) Seek(ctx context.Context, sample int64) error {
 	}
 
 	d.layer3.Reset()
+	d.layer12.Reset()
 
 	d.pending = nil
 
@@ -337,19 +335,27 @@ func (d *Decoder) decodeFrame() error {
 		d.layer3.Resync()
 	}
 
-	if !head.CheckCRC(data, byteBits*head.SideInfoSize()) {
-		d.stats.CRCMismatches++
-	}
-
 	if len(data) < head.Size() {
-		// The stream ends inside the frame. Its main data may still lie in the bytes it holds.
+		// The stream ends inside the frame. Its audio data may still lie in the bytes it holds.
 		cut := d.cut[:head.Size()]
 		clear(cut[copy(cut, data):])
 
 		data = cut
 	}
 
-	whole, err := d.layer3.Decode(d.pcm[:], head, data)
+	var intact bool
+
+	whole := true
+
+	if head.Layer == frame.Layer3 {
+		intact, whole, err = d.layer3.Decode(d.pcm[:], head, data)
+	} else {
+		intact, err = d.layer12.Decode(d.pcm[:], head, data)
+	}
+
+	if !intact {
+		d.stats.CRCMismatches++
+	}
 
 	switch {
 	case err != nil:

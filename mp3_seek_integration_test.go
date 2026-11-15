@@ -15,10 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nicholas-fedor/mp3-decoder"
+	"github.com/nicholas-fedor/mp3-decoder/frame"
 )
 
 // TestSeek checks that the samples after a seek are those of a decode from the start, bit for bit,
-// on every fixture.
+// on every fixture and on a Layer I stream.
 //
 // Each fixture is opened alone, whose tag frame gives its length so no walk indexes it, and joined
 // to a copy of itself, which a walk indexes. The seeks run far forward first, then back and forth,
@@ -26,10 +27,16 @@ import (
 func TestSeek(t *testing.T) {
 	t.Parallel()
 
+	streams := map[string][]byte{"Layer I": layer1Stream(t, 30)}
+
 	for _, name := range []string{"mpeg1-joint.mp3", "mpeg1-mono.mp3", "protected.mp3", "free.mp3", "mpeg2.mp3", "mpeg25.mp3"} {
 		data, err := os.ReadFile("testdata/" + name)
 		require.NoError(t, err)
 
+		streams[name] = data
+	}
+
+	for name, data := range streams {
 		for kind, stream := range map[string][]byte{"alone": data, "joined to a copy": slices.Concat(data, data)} {
 			t.Run(name+" "+kind, func(t *testing.T) {
 				t.Parallel()
@@ -39,7 +46,8 @@ func TestSeek(t *testing.T) {
 				length := int64(len(want))
 
 				decoder := openFile(t, stream)
-				samples := int64(1152)
+				_, head, _ := frame.Find(stream, nil)
+				samples := int64(head.Samples())
 
 				targets := make([]int64, 0, 32)
 				targets = append(targets, length*3/4, 0, length-1, 1, samples-1, samples, length/2, 2*samples+7)

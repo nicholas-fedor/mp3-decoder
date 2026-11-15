@@ -277,8 +277,9 @@ func TestHeaderMinDataSize(t *testing.T) {
 	}
 }
 
-// TestHeaderPreroll checks the frames that refill the bit reservoir, then those that refill the
-// filterbanks, from the smallest frame of each stream.
+// TestHeaderPreroll checks the Layer III frames that refill the bit reservoir, then those that
+// refill the filterbanks, from the smallest frame of each stream, and the Layer I and II frames
+// that refill the synthesis filterbank.
 func TestHeaderPreroll(t *testing.T) {
 	t.Parallel()
 
@@ -297,6 +298,11 @@ func TestHeaderPreroll(t *testing.T) {
 		{"MPEG-2.5 at 8 kHz", Header{SampleRate: 8000, Version: MPEG25, Layer: Layer3}, 6 + 2},
 		// 511 bytes in frames of 326 - 38 bytes.
 		{"free format", Header{SampleRate: 44100, Bitrate: 100000, Version: MPEG1, Layer: Layer3, Free: true}, 2 + 1},
+		// 15 sets in frames of 12.
+		{"Layer I", Header{SampleRate: 44100, Version: MPEG1, Layer: Layer1}, 2},
+		{"MPEG-2 Layer I", Header{SampleRate: 22050, Version: MPEG2, Layer: Layer1}, 2},
+		// 15 sets in a frame of 36.
+		{"Layer II", Header{SampleRate: 44100, Version: MPEG1, Layer: Layer2}, 1},
 	}
 
 	for _, tt := range tests {

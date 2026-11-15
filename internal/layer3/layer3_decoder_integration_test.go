@@ -224,6 +224,30 @@ func TestDecodeMissingAfterMixed(t *testing.T) {
 	assert.Equal(t, make([][2]float64, secondHead.Samples()), pcm[:secondHead.Samples()])
 }
 
+// TestDecodeCRC checks that a frame whose CRC does not match its side information decodes all the
+// same, to the samples of the frame with its CRC intact.
+func TestDecodeCRC(t *testing.T) {
+	t.Parallel()
+
+	data := encodedFrames(t, "protected.mp3")[0]
+	head, _ := frame.Parse(data)
+	broken := slices.Clone(data)
+	broken[frame.HeaderSize] ^= 1
+
+	var intact, damaged layer3.Decoder
+
+	want := make([][2]float64, frame.MaxSamples)
+	got := make([][2]float64, frame.MaxSamples)
+
+	decode(t, &intact, want, head, data)
+
+	matched, whole, err := damaged.Decode(got, head, broken)
+	require.NoError(t, err)
+	assert.False(t, matched)
+	assert.True(t, whole)
+	assert.Equal(t, want, got)
+}
+
 // TestDecodeErrors checks that a frame the decoder refuses leaves the samples as they were.
 func TestDecodeErrors(t *testing.T) {
 	t.Parallel()
@@ -248,7 +272,7 @@ func TestDecodeErrors(t *testing.T) {
 
 		var decoder layer3.Decoder
 
-		_, err := decoder.Decode(pcm, head, data)
+		_, _, err := decoder.Decode(pcm, head, data)
 		require.ErrorIs(t, err, tt.want, tt.name)
 		assert.Equal(t, [2]float64{0.5, -0.5}, pcm[7], tt.name)
 	}
@@ -257,7 +281,7 @@ func TestDecodeErrors(t *testing.T) {
 
 	var decoder layer3.Decoder
 
-	_, err := decoder.Decode(make([][2]float64, frame.MaxSamples), head, data[:20])
+	_, _, err := decoder.Decode(make([][2]float64, frame.MaxSamples), head, data[:20])
 	require.ErrorIs(t, err, layer3.ErrShortFrame)
 }
 
@@ -282,12 +306,14 @@ func reachingBack(t *testing.T, frames [][]byte) int {
 	return 0
 }
 
-// decode decodes a frame that must decode, and reports whether its main data was all there.
+// decode decodes a frame that must decode with any CRC matching, and reports whether its main
+// data was all there.
 func decode(tb testing.TB, decoder *layer3.Decoder, pcm [][2]float64, head frame.Header, data []byte) bool {
 	tb.Helper()
 
-	whole, err := decoder.Decode(pcm, head, data)
+	intact, whole, err := decoder.Decode(pcm, head, data)
 	require.NoError(tb, err)
+	require.True(tb, intact, "CRC")
 
 	return whole
 }

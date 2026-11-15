@@ -136,6 +136,8 @@ func record(t *testing.T, outcomes []outcome) {
 }
 
 // measure decodes a stream from the cache and measures it against each of its references.
+//
+// Every frame of the stream must match its CRC.
 func measure(t *testing.T, dir string, stream conformance.Stream) outcome {
 	t.Helper()
 
@@ -169,6 +171,10 @@ func measure(t *testing.T, dir string, stream conformance.Stream) outcome {
 		if err != nil {
 			found.failed++
 		}
+	}
+
+	if decoder != nil {
+		assert.Zero(t, decoder.Stats().CRCMismatches, "%s: frames whose CRC does not match", stream.Name)
 	}
 
 	found.digest = conformance.Digest(decoded)

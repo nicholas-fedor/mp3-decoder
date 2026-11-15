@@ -286,7 +286,7 @@ func BenchmarkDecode(b *testing.B) {
 
 	for b.Loop() {
 		for i, data := range frames {
-			_, err = decoder.Decode(pcm, headers[i], data)
+			_, _, err = decoder.Decode(pcm, headers[i], data)
 		}
 	}
 

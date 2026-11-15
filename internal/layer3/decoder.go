@@ -20,7 +20,7 @@ type Decoder struct {
 	// spectrum holds the quantized values of the granule being decoded.
 	spectrum Spectrum
 	// synth holds each channel's polyphase synthesis filterbank.
-	synth [2]synth.Filterbank
+	synth synth.Filterbanks
 	// lines holds a granule's spectral lines for each channel.
 	lines [2][granuleLines]float64
 	// hybrid holds each channel's hybrid filterbank.
@@ -33,8 +33,6 @@ type Decoder struct {
 	side SideInfo
 	// factors holds each channel's scalefactors.
 	factors [2]Scalefactors
-	// channels is the number of channels of the frame decoded last, or 0 before the first.
-	channels int
 }
 
 // granulePCM is the number of PCM samples a granule gives for each channel.
@@ -48,7 +46,7 @@ const granulePCM = hybrid.Samples * synth.Subbands
 // run, so the frames after it carry on smoothly. A frame with another number of channels than the
 // frame before it starts both channels' filterbanks afresh, as a new stream would, while the bit
 // reservoir carries on. A mono frame gives each sample to both channels. The samples are not
-// clipped.
+// clipped. A frame whose CRC does not match its side information is decoded all the same.
 //
 // Parameters:
 //   - dst: the PCM samples as left and right pairs, at least as many as the frame holds.
@@ -56,15 +54,24 @@ const granulePCM = hybrid.Samples * synth.Subbands
 //   - data: the frame's bytes from its header to its end.
 //
 // Returns:
-//   - bool: whether the decoder held all of the frame's main data, without which it gives silence.
-//   - error: [ErrShortFrame] or [ErrBlockType], and then dst is left as it was.
-func (d *Decoder) Decode(dst [][2]float64, head frame.Header, data []byte) (bool, error) {
-	err := d.side.Parse(head, data)
+//   - intact: whether the frame's CRC matches its side information, or the frame has no CRC.
+//   - whole: whether the decoder held all of the frame's main data, without which it gives silence.
+//   - err: [ErrShortFrame] or [ErrBlockType], and then dst is left as it was.
+//
+//nolint:nonamedreturns // Same-type returns need names.
+func (d *Decoder) Decode(dst [][2]float64, head frame.Header, data []byte) (intact, whole bool, err error) {
+	intact = head.CheckCRC(data, bitsPerByte*head.SideInfoSize())
+
+	err = d.side.Parse(head, data)
 	if err != nil {
-		return false, err
+		return intact, false, err
 	}
 
-	d.followChannels(head)
+	if d.synth.Follow(head.Channels()) {
+		for ch := range d.hybrid {
+			d.hybrid[ch].Reset()
+		}
+	}
 
 	main, missing := d.reservoir.MainData(d.side.MainDataBegin, data[head.DataAt():])
 	start := 0
@@ -81,7 +88,7 @@ func (d *Decoder) Decode(dst [][2]float64, head frame.Header, data []byte) (bool
 		}
 	}
 
-	return missing == 0, nil
+	return intact, missing == 0, nil
 }
 
 // Reset readies the decoder for a stream from its start, with an empty bit reservoir and
@@ -99,22 +106,6 @@ func (d *Decoder) Reset() {
 // filterbanks carry on.
 func (d *Decoder) Resync() {
 	d.reservoir.Reset()
-}
-
-// followChannels starts both channels' filterbanks afresh when a frame has another number of
-// channels than the frame before it, then records the frame's.
-//
-// Parameters:
-//   - head: the frame's header.
-func (d *Decoder) followChannels(head frame.Header) {
-	if d.channels != 0 && d.channels != head.Channels() {
-		for ch := range d.hybrid {
-			d.hybrid[ch].Reset()
-			d.synth[ch].Reset()
-		}
-	}
-
-	d.channels = head.Channels()
 }
 
 // granule decodes one granule of every channel into its PCM samples.
@@ -187,7 +178,7 @@ func (d *Decoder) synthesize(dst [][2]float64, head frame.Header, gr, ch int) {
 	var pcm [synth.Subbands]float64
 
 	for at := range d.subbands {
-		d.synth[ch].Synthesize(&pcm, &d.subbands[at])
+		d.synth.Channel[ch].Synthesize(&pcm, &d.subbands[at])
 
 		for sample, value := range pcm {
 			dst[at*synth.Subbands+sample][ch] = value

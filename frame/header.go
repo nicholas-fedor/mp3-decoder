@@ -142,6 +142,12 @@ const (
 	lsfMainDataBegin = 1<<8 - 1
 	// carriedGranules is how many granules before a granule the filterbanks carry samples from.
 	carriedGranules = 2
+	// subbands is the number of polyphase subbands, and the number of samples in each set of
+	// subband samples.
+	subbands = 32
+	// carriedSets is how many sets of subband samples before a set the synthesis filterbank carries
+	// samples from.
+	carriedSets = 15
 )
 
 // Layer III side information sizes in bytes.
@@ -227,17 +233,27 @@ func (h Header) DataAt() int {
 	return at
 }
 
-// Preroll returns how many frames before a frame of a Layer III stream decoding must start for
-// that frame to decode as it does in the whole stream.
+// Preroll returns how many frames before a frame decoding must start for that frame to decode as
+// it does in the whole stream.
 //
-// A frame's main data may begin up to 511 bytes back in MPEG-1 and 255 bytes back otherwise, so
-// the frames decoded first must fill the bit reservoir that far, even when they are the
-// smallest frames the stream could hold. The filterbanks carry samples of each granule into the
-// next two, so the two granules before the frame must also decode from their own main data.
+// The synthesis filterbank carries each set of 32 subband samples into the output of the next 15,
+// so in Layers I and II the frames decoded first must hold those 15 sets. That takes 2 frames in
+// Layer I and 1 in Layer II.
+//
+// In Layer III a frame's main data may begin up to 511 bytes back in MPEG-1 and 255 bytes back
+// otherwise, so the frames decoded first must fill the bit reservoir that far, even when they are
+// the smallest frames the stream could hold. The filterbanks carry samples of each granule into
+// the next two, so the two granules before the frame must also decode from their own main data.
 //
 // Returns:
 //   - int: the number of frames.
 func (h Header) Preroll() int {
+	if h.Layer != Layer3 {
+		sets := h.Samples() / subbands
+
+		return (carriedSets + sets - 1) / sets
+	}
+
 	reach := lsfMainDataBegin
 	if h.Version == MPEG1 {
 		reach = MaxMainDataBegin

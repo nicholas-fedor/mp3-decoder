@@ -55,6 +55,11 @@ This document explains how the decoder is built and why, part by part. Each sect
     - [Flow](#flow)
     - [Fast Matrixing](#fast-matrixing)
     - [Window](#window)
+- [Layer I Decoding](#layer-i-decoding)
+  - [Bit Allocation](#bit-allocation)
+  - [Scalefactor Table](#scalefactor-table)
+  - [Sample Requantization](#sample-requantization)
+  - [Values No Encoder Writes](#values-no-encoder-writes)
 - [Stream Decoding](#stream-decoding)
   - [Opening a Stream](#opening-a-stream)
   - [Length](#length)
@@ -67,6 +72,7 @@ This document explains how the decoder is built and why, part by part. Each sect
   - [Damage Counts](#damage-counts)
   - [Accuracy](#accuracy)
 - [Performance](#performance)
+  - [Measured Changes](#measured-changes)
 
 ## Principles
 
@@ -377,7 +383,7 @@ The mixed block flag may be set on a start or stop block, where every stage befo
 
 #### Channel Changes
 
-A stream may change between mono and stereo from one frame to the next. Both channels' filterbanks, hybrid and polyphase, then start afresh, as at the start of a stream, while the bit reservoir carries on. ISO's references for `l3_10201`, which changes from mono to stereo and back, start each run from silent filterbanks, and match only so. FFmpeg and mpg123 carry the left channel's filterbanks over the change, and carrying them over differs from the references by up to 0.15 in the first granule after it.
+A stream may change between mono and stereo from one frame to the next. Both channels' filterbanks, hybrid and polyphase, then start afresh, as at the start of a stream, while the bit reservoir carries on. `synth.Filterbanks` keeps this rule for every layer, and tells Layer III when to restart the hybrid filterbanks too. ISO's references for `l3_10201`, which changes from mono to stereo and back, start each run from silent filterbanks, and match only so. FFmpeg and mpg123 carry the left channel's filterbanks over the change, and carrying them over differs from the references by up to 0.15 in the first granule after it.
 
 #### Exact Transform Tables
 
@@ -421,6 +427,40 @@ Two further checks bind the window and the matrixing together:
 - The impulse response of subband k is D(n) cos(π/64 (16 + n mod 64)(2k+1)) for the 512 samples the window spans, then silence.
 - Random PCM through the published analysis filterbank, whose window is D/32, and back through synthesis returns 481 samples late. The error stays under 1e-4, the near reconstruction the filterbank pair was designed for.
 
+## Layer I Decoding
+
+The package `internal/layer12` decodes a Layer I frame in these stages:
+
+1. The [bit allocation](#bit-allocation) gives the width of each subband's samples.
+2. A scalefactor follows for each subband with samples, from the [scalefactor table](#scalefactor-table).
+3. Twelve sets of samples follow, each with one sample of every subband, which [requantization](#sample-requantization) scales.
+4. [Polyphase synthesis](#polyphase-synthesis) turns each set into 32 PCM samples, as in Layer III.
+
+A Layer I frame stands alone. Nothing but the synthesis carries over from one frame to the next, so `layer12.Decoder` keeps only each channel's synthesis filterbank.
+
+### Bit Allocation
+
+Each subband carries a 4-bit allocation for each channel. An allocation n from 1 to 14 gives samples of n+1 bits, and 0 gives the subband no samples. In joint stereo, the subbands from a bound on carry one allocation and one sample for both channels, and each channel scales the sample by its own scalefactor. The mode extension sets the bound to subband 4, 8, 12 or 16. In every other mode the bound is 32, so each channel keeps its own samples throughout.
+
+### Scalefactor Table
+
+A 6-bit index selects each scalefactor, 2^(1-i/3) for index i. The table is generated into `scalefactors_gen.go`, each entry the cube root of 2^(3-i) rounded to the nearest float64, so every third entry is an exact power of two. Layer II shares the table.
+
+### Sample Requantization
+
+A sample of n bits with code c stands for 2(c+1-2^(n-1))/(2^n-1) times its scalefactor. The codes divide the range from -1 to 1 into 2^n-1 steps, centred on 0. The decoder works out the step of each subband once a frame, as the scalefactor times 2/(2^n-1), and multiplies each sample's offset from the centre by it.
+
+### Values No Encoder Writes
+
+Two Layer I values are never written. The allocation 15 is forbidden, since it could pass for a sync word. The scalefactor index 63 is left out of the table. The leading decoders treat them so:
+
+| Value | mpg123 | libmad | FFmpeg | This decoder |
+| --- | --- | --- | --- | --- |
+| Allocation 15 | Aborts the frame, which then gives silence | Fails the frame | Reads samples of 16 bits | Silences the frame |
+| Scalefactor index 63 | Scales the subband by 0 | Scales the subband by 0, and fails the frame only in a strict build | Continues the table to 2^-20 | Scales the subband by 0 |
+
+The decoder follows mpg123 and libmad, which agree. A frame with the forbidden allocation counts as `Undecodable`, as in Layer III.
+
 ## Stream Decoding
 
 ### Opening a Stream
@@ -439,9 +479,9 @@ The walk also fills the frame index that [Seeking](#seeking) uses. `mp3.OpenStre
 
 ### Frame Decoding
 
-`layer3.Decoder` decodes a frame through every stage, granule by granule. It keeps what one frame passes to the next: the bit reservoir, the scalefactors that scfsi reuses, and each channel's filterbanks. A mono frame gives each sample to both channels, and samples are not clipped.
+`layer3.Decoder` decodes a Layer III frame through every stage, granule by granule. It keeps what one frame passes to the next: the bit reservoir, the scalefactors that scfsi reuses, and each channel's filterbanks. `layer12.Decoder` decodes a Layer I frame. A stream keeps its layer, so the decoder of the first frame's layer decodes them all. A mono frame gives each sample to both channels, and samples are not clipped.
 
-A frame whose side information holds a value no encoder writes fails to decode. It gives silence in its place, as mpg123 fills such a frame with zeros. Every frame then keeps its samples, so `Len`, positions and seeks stay exact after damage.
+A frame that holds a value no encoder writes fails to decode. In Layer III that is a value of its side information, and in Layer I it is the forbidden allocation. It gives silence in its place, as mpg123 fills such a frame with zeros. Every frame then keeps its samples, so `Len`, positions and seeks stay exact after damage.
 
 The hybrid filterbank takes the block of each granule from Layer III: every subband long, with the normal, start or stop window, for long blocks, none for short blocks, and those below where short band 3 starts for mixed blocks.
 
@@ -480,7 +520,7 @@ The decoder follows FFmpeg, whose frames past the count still play, so a stream 
 - Its main data may begin up to 511 bytes back in MPEG-1, and 255 bytes back at the lower sampling frequencies.
 - The hybrid filterbank's overlap and the polyphase synthesis carry samples of each granule into the next two.
 
-So decoding starts afresh enough frames earlier to cover both. The first frames must fill the bit reservoir that far even when they are the smallest frames the stream could hold. Those are frames at its lowest bitrate with a CRC and two channels. The frames of the two granules before the target's frame follow. Each stage keeps only this bounded past. The synthesis also sums its values in the same order wherever its ring buffer stands. So from the target's frame on, the state is the one a decode from the start reaches. The frames decoded first may give silence, and their samples are dropped. `frame.Header.Preroll` gives the count from a stream's header, so a player that opens a file partway through, at a byte offset, can start that many frames before the sample it wants too. On a damaged stream, a frame in that span that fails to decode adds no main data to the reservoir, so the frames just after it may decode otherwise than from the start.
+So decoding starts afresh enough frames earlier to cover both. In Layer I only the synthesis reaches back. It carries each set of 32 subband samples into the output of the next 15, and a Layer I frame holds 12 sets, so decoding starts 2 frames before the target's frame. In Layer III the reservoir sets the count. The first frames must fill the bit reservoir that far even when they are the smallest frames the stream could hold. Those are frames at its lowest bitrate with a CRC and two channels. The frames of the two granules before the target's frame follow. Each stage keeps only this bounded past. The synthesis also sums its values in the same order wherever its ring buffer stands. So from the target's frame on, the state is the one a decode from the start reaches. The frames decoded first may give silence, and their samples are dropped. `frame.Header.Preroll` gives the count from a stream's header, so a player that opens a file partway through, at a byte offset, can start that many frames before the sample it wants too. On a damaged stream, a frame in that span that fails to decode adds no main data to the reservoir, so the frames just after it may decode otherwise than from the start.
 
 | Stream | Smallest frame's main data | Frames for the reservoir | Frames for the filterbanks | Frames decoded first |
 | --- | --- | --- | --- | --- |
@@ -490,6 +530,7 @@ So decoding starts afresh enough frames earlier to cover both. The first frames 
 | MPEG-2 at 22.05 kHz | 3 bytes | 85 | 2 | 87 |
 | MPEG-2 at 24 kHz | 1 byte | 255 | 2 | 257 |
 | MPEG-2.5 at 8 kHz | 49 bytes | 6 | 2 | 8 |
+| Layer I | No reservoir | 0 | 2 | 2 |
 
 The bound needs no side information, so the frame to start from follows from frame numbers alone. mpg123 decodes 4 frames before the target by default, which suits most streams but can fall short of the reservoir's reach. On the fixtures, starting only 3 frames back already changes samples of the joint stereo and MPEG-2 fixtures.
 
@@ -505,9 +546,16 @@ Damage never ends a stream, and `Stats` counts how often decoding carried on pas
 | `Resyncs` | Passes over bytes that are not a frame of the stream | The frames after it, as [Tags and Damage Between Frames](#tags-and-damage-between-frames) describes |
 | `CRCMismatches` | Frames whose CRC does not match | Its samples, decoded all the same |
 | `Underflows` | Frames whose main data begins before the bytes the reservoir holds | Silence, as [Missing Main Data](#missing-main-data) describes |
-| `Undecodable` | Frames whose side information holds a value no encoder writes | Silence |
+| `Undecodable` | Frames that hold a value no encoder writes | Silence |
 
-The CRC of a Layer III frame covers the last two bytes of its header and its side information. A frame whose CRC does not match is decoded anyway, as FFmpeg and mpg123 decode it. mpg123 never checks the CRC. FFmpeg checks it only when its `err_detect` option asks, and then only logs a mismatch unless `explode` is set too. Every frame of the fixture LAME encoded with CRCs passes, and a damaged CRC changes no sample. The frames a seek decodes before its sample are not counted, since the first of them give silence by design.
+The CRC covers the last two bytes of a frame's header and the first bits after the CRC, which each layer's decoder checks, since only it knows how many there are:
+
+| Layer | Bits after the CRC that it covers |
+| --- | --- |
+| Layer I | The bit allocation, 4 bits for each subband and channel below the bound and for each subband from it on |
+| Layer III | The side information |
+
+A frame whose CRC does not match is decoded anyway, as FFmpeg and mpg123 decode it. mpg123 never checks the CRC. FFmpeg checks it only when its `err_detect` option asks, and then only logs a mismatch unless `explode` is set too. In a stereo Layer I frame, FFmpeg's check covers 256 bits whatever the bound, which in joint stereo runs past the allocation. libmad covers the allocation alone, as this decoder does. Every frame of the fixture LAME encoded with CRCs passes, and so does every frame of the conformance streams, seven of the Layer I streams among them. A damaged CRC changes no sample. The frames a seek decodes before its sample are not counted, since the first of them give silence by design.
 
 ### Accuracy
 
@@ -541,6 +589,7 @@ Measured with `go test -bench` on an AMD Ryzen 9 7950X. The joint stereo fixture
 | A frame through every stage | The joint stereo fixture | About 24 µs a frame |
 | Opening and decoding a whole stream | The joint stereo fixture | About 890 times faster than real time |
 | A seek, then reading the frame there | The joint stereo fixture, indexed | About 265 µs, mostly the 9 frames decoded before the sample |
+| A Layer I frame through every stage | Random stereo frames with samples in every subband | About 7.5 µs a frame of 384 samples |
 
 ### Measured Changes
 

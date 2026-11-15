@@ -11,7 +11,7 @@ A pure-Go MPEG audio decoder for MPEG-1, MPEG-2 and MPEG-2.5 audio in Layers I, 
 
 ## Status
 
-The decoder plays streams of MPEG-1, MPEG-2 and MPEG-2.5 Layer III frames, and decodes every Layer III stream of ISO's conformance package at full accuracy, as [Conformance](docs/conformance.md) records. It leaves out the encoder delay and padding a LAME tag gives, for gapless playback, and seeks to any sample exactly. Layers I and II are in development.
+The decoder plays streams of Layer I frames and of MPEG-1, MPEG-2 and MPEG-2.5 Layer III frames. It decodes every Layer I and Layer III stream of ISO's conformance package at full accuracy, as [Conformance](docs/conformance.md) records. It leaves out the encoder delay and padding a LAME tag gives, for gapless playback, and seeks to any sample exactly. Layer II is in development.
 
 ## Usage
 

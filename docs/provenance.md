@@ -55,7 +55,7 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `layer3`: the highest lower-rate bands taking position 0 when the band below lies under the bound | The ISO/IEC 14496-26 reference of `l3_20245` |
 | `mp3`: a last frame that the stream ends inside, decoded from the bytes it holds | FFmpeg, libavcodec/mpegaudiodec_template.c (decode_frame) |
 | `layer3`, `hybrid`: the normal window for the lowest subbands of a start or stop block with the mixed flag | FFmpeg, libavcodec/mpegaudiodsp_template.c (ff_imdct36_blocks). mpg123, src/libmpg123/layer3.c (III_hybrid) |
-| `layer3`: filterbanks started afresh when the number of channels changes | The ISO/IEC 14496-26 references of `l3_10201` |
+| `synth`, `layer3`: filterbanks started afresh when the number of channels changes | The ISO/IEC 14496-26 references of `l3_10201` |
 | `conformance`: decoded samples clipped to the 24-bit range before measuring | The ISO/IEC 14496-26 reference of `l3_10204`, which holds clipped samples |
 | `mp3`: the Info frame skipped at the start of a stream | mpg123, src/libmpg123/parse.c (check_lame_tag). FFmpeg, libavformat/mp3dec.c (mp3_parse_vbr_tags) |
 | `mp3`: tags between frames stepped over, and a resync past other bytes that empties the bit reservoir | mpg123, src/libmpg123/parse.c (wetwork) |
@@ -66,6 +66,12 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `mp3`: the frame index, its step doubling as it fills | mpg123, src/libmpg123/index.c (fi_shrink and INT123_fi_add) |
 | `frame`, `mp3`: the frames decoded before a seek's target, from the reservoir's reach and the granules the filterbanks carry | The reservoir and filterbank state of this decoder. mpg123, src/libmpg123/frame.c (ignoreframe) decodes a fixed number of frames instead |
 | `mp3`: a frame whose CRC does not match decoded all the same | FFmpeg, libavcodec/mpegaudiodec_template.c (handle_crc). mpg123, src/libmpg123/parse.c, which skips the CRC |
+| `layer12`: Layer I bit allocation, scalefactors and samples, their order and the joint stereo bound | FFmpeg, libavcodec/mpegaudiodec_template.c (mp_decode_layer1). mpg123, src/libmpg123/layer1.c (I_step_one and I_step_two) |
+| `layer12`: Layer I requantization | FFmpeg, libavcodec/mpegaudiodec_template.c (l1_unscale). mpg123, src/libmpg123/layer1.c (I_step_two) |
+| `layer12`: the scalefactor table, with 0 for index 63 | mpg123, src/libmpg123/layer2.c (INT123_init_layer12_stuff). libmad, layer12.c and sf_table.dat |
+| `layer12`: a frame with the allocation 15 failing to decode | mpg123, src/libmpg123/layer1.c (check_balloc). libmad, layer12.c (mad_layer_I) |
+| `layer12`: the Layer I CRC covering the bit allocation | libmad, layer12.c (mad_layer_I). The ISO/IEC 14496-26 conformance streams with CRCs |
+| `frame`, `mp3`: the frames decoded before a Layer I seek's target, from the sets of subband samples the synthesis carries | The synthesis filterbank of this decoder |
 | `trig`: π and cosines | Machin's formula and the Taylor series of the cosine |
 
 No part adapts another decoder's code. The Huffman code tables and the synthesis window taps are data transcribed from FFmpeg.
