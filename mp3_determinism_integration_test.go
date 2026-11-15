@@ -70,7 +70,7 @@ func TestGolden(t *testing.T) {
 
 	var got strings.Builder
 
-	for _, name := range []string{"mpeg1-joint.mp3", "mpeg1-mono.mp3", "mpeg2.mp3", "mpeg25.mp3", "protected.mp3"} {
+	for _, name := range []string{"free.mp3", "mpeg1-joint.mp3", "mpeg1-mono.mp3", "mpeg2.mp3", "mpeg25.mp3", "protected.mp3"} {
 		fmt.Fprintf(&got, "%s %x\n", name, conformance.Digest(decodeFile(t, name)))
 	}
 

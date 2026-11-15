@@ -106,3 +106,25 @@ func FuzzID3v2Size(f *testing.F) {
 		assert.Equal(t, id3Magic, string(head[:len(id3Magic)]))
 	})
 }
+
+// FuzzTagSize checks that a tag size is 0, or at least an ID3v2 header's size for bytes that start
+// with the magic of a tag.
+//
+// The seed corpus holds each tag TagSize recognizes.
+func FuzzTagSize(f *testing.F) {
+	f.Add(mp3test.ID3v2{Body: 257}.Bytes())
+	f.Add(mp3test.ID3v1())
+	f.Add(mp3test.APE{Items: 40, Header: true}.Bytes())
+
+	f.Fuzz(func(t *testing.T, head []byte) {
+		size := TagSize(head)
+		if size == 0 {
+			return
+		}
+
+		assert.GreaterOrEqual(t, size, ID3v2HeaderSize)
+		assert.True(t, slices.ContainsFunc([]string{id3Magic, id3v1Magic, apeMagic}, func(magic string) bool {
+			return len(head) >= len(magic) && string(head[:len(magic)]) == magic
+		}), "a tag of %d bytes starts with no magic", size)
+	})
+}

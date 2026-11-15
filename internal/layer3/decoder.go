@@ -83,6 +83,15 @@ func (d *Decoder) Decode(dst [][2]float64, head frame.Header, data []byte) error
 	return nil
 }
 
+// Resync empties the bit reservoir, since bytes of the stream were lost before the next frame.
+//
+// The main data of the frames before the loss no longer leads to the next frame, so a frame whose
+// main data begins before the loss gives silence, as one does on joining a stream midway. The
+// filterbanks carry on.
+func (d *Decoder) Resync() {
+	d.reservoir.Reset()
+}
+
 // followChannels starts both channels' filterbanks afresh when a frame has another number of
 // channels than the frame before it, then records the frame's.
 //

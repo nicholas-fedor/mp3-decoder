@@ -65,23 +65,7 @@ func TestDecodeJoined(t *testing.T) {
 	t.Parallel()
 
 	frames := encodedFrames(t, "mpeg1-joint.mp3")
-
-	var side layer3.SideInfo
-
-	join := 0
-
-	for at, data := range frames[2:] {
-		head, _ := frame.Parse(data)
-		require.NoError(t, side.Parse(head, data))
-
-		if side.MainDataBegin > 0 {
-			join = at + 2
-
-			break
-		}
-	}
-
-	require.Positive(t, join, "a frame whose main data begins earlier")
+	join := reachingBack(t, frames)
 
 	var decoder layer3.Decoder
 
@@ -101,6 +85,40 @@ func TestDecodeJoined(t *testing.T) {
 	}
 
 	assert.True(t, sounds, "no later frame sounds")
+}
+
+// TestDecodeResync checks that a resync drops the main data of the frames before it, while the
+// filterbanks carry on.
+//
+// The frame after the resync reaches back to main data the decoder no longer holds, so it decodes
+// otherwise than without the resync. The frames after it reach back only to main data since the
+// resync, so the output soon matches a decoder that never resynced, sample for sample.
+func TestDecodeResync(t *testing.T) {
+	t.Parallel()
+
+	frames := encodedFrames(t, "mpeg1-joint.mp3")
+	join := reachingBack(t, frames)
+
+	var resynced, steady layer3.Decoder
+
+	got := make([][2]float64, frame.MaxSamples)
+	want := make([][2]float64, frame.MaxSamples)
+
+	for at, data := range frames[:join+8] {
+		if at == join {
+			resynced.Resync()
+		}
+
+		head, _ := frame.Parse(data)
+		require.NoError(t, resynced.Decode(got, head, data))
+		require.NoError(t, steady.Decode(want, head, data))
+
+		if at == join {
+			assert.NotEqual(t, want, got, "the frame after the resync decodes as without it")
+		}
+	}
+
+	assert.Equal(t, want, got, "the output has not converged 8 frames after the resync")
 }
 
 // TestDecodeChannelChange checks that the frames after a change between mono and stereo decode as
@@ -168,4 +186,25 @@ func TestDecodeErrors(t *testing.T) {
 	var decoder layer3.Decoder
 
 	require.ErrorIs(t, decoder.Decode(make([][2]float64, frame.MaxSamples), head, data[:20]), layer3.ErrShortFrame)
+}
+
+// reachingBack returns the first frame after the first two whose main data begins in the frames
+// before it.
+func reachingBack(t *testing.T, frames [][]byte) int {
+	t.Helper()
+
+	var side layer3.SideInfo
+
+	for at, data := range frames[2:] {
+		head, _ := frame.Parse(data)
+		require.NoError(t, side.Parse(head, data))
+
+		if side.MainDataBegin > 0 {
+			return at + 2
+		}
+	}
+
+	require.Fail(t, "no frame's main data begins earlier")
+
+	return 0
 }

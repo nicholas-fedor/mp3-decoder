@@ -16,6 +16,7 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `container`: ID3v2 size | ID3v2.4. FFmpeg, libavformat/id3v2.c (ff_id3v2_match and ff_id3v2_tag_len) |
 | `container`: ID3v1 and Lyrics3 v2.00 trailers | ID3v1. Lyrics3 v2.00 |
 | `container`: APEv2 trailer | FFmpeg, libavformat/apetag.c (ff_ape_parse_tag) |
+| `container`: tags at the start of bytes, an APEv2 tag by its header | mpg123, src/libmpg123/parse.c (wetwork and handle_apetag) |
 | `container`: Xing and Info tags | LAME info tag. FFmpeg, libavformat/mp3dec.c (mp3_parse_info_tag). mpg123, src/libmpg123/parse.c (check_lame_tag) |
 | `container`: VBRI tag | FFmpeg, libavformat/mp3dec.c (mp3_parse_vbri_tag) |
 | `container`: seek table offsets | LAME info tag |
@@ -55,6 +56,8 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `layer3`: filterbanks started afresh when the number of channels changes | The ISO/IEC 14496-26 references of `l3_10201` |
 | `conformance`: decoded samples clipped to the 24-bit range before measuring | The ISO/IEC 14496-26 reference of `l3_10204`, which holds clipped samples |
 | `mp3`: the Info frame skipped at the start of a stream | mpg123, src/libmpg123/parse.c (check_lame_tag). FFmpeg, libavformat/mp3dec.c (mp3_parse_vbr_tags) |
+| `mp3`: tags between frames stepped over, and a resync past other bytes that empties the bit reservoir | mpg123, src/libmpg123/parse.c (wetwork) |
+| `mp3`: the stream ending where frames of another version, layer or sampling frequency start | mpg123, src/libmpg123/parse.c (read_frame with MPG123_NO_FRANKENSTEIN) |
 | `trig`: π and cosines | Machin's formula and the Taylor series of the cosine |
 
 No part adapts another decoder's code. The Huffman code tables and the synthesis window taps are data transcribed from FFmpeg.

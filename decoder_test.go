@@ -181,11 +181,17 @@ func TestReadEnds(t *testing.T) {
 		assert.Len(t, got, 3*frame.MaxSamples/2)
 	})
 
-	for name, size := range map[string]int{"a source failing within a frame": 1000, "a source failing between frames": 834} {
+	sources := map[string][]byte{
+		"a source failing within a frame":   frames(stereoHead, 3)[:1000],
+		"a source failing between frames":   frames(stereoHead, 3)[:834],
+		"a source failing after junk bytes": slices.Concat(frames(stereoHead, 2), []byte("junk!")),
+	}
+
+	for name, data := range sources {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			decoder, err := OpenStream(t.Context(), failAfter(frames(stereoHead, 3)[:size]))
+			decoder, err := OpenStream(t.Context(), failAfter(data))
 			require.NoError(t, err)
 
 			got, err := readSamples(decoder)

@@ -57,6 +57,7 @@ This document explains how the decoder is built and why, part by part. Each sect
   - [Opening a Stream](#opening-a-stream)
   - [Frame Decoding](#frame-decoding)
   - [Missing Main Data](#missing-main-data)
+  - [Tags and Damage Between Frames](#tags-and-damage-between-frames)
   - [End of a Stream](#end-of-a-stream)
   - [Accuracy](#accuracy)
 - [Performance](#performance)
@@ -109,6 +110,8 @@ So it accepts these, which a stricter reading would reject:
 #### Free Format
 
 A free-format header gives no frame size. `Find` measures it from the next two headers, up to 3456 bytes as mpg123 allows. Two headers must follow at one spacing plus each frame's padding. The returned header then carries the bitrate that spacing gives, so its `Size` works like any other. No frame at a fixed bitrate reaches 3456 bytes, so `frame.MaxSize` bounds every frame.
+
+The decoder gives every frame of a free-format stream the bitrate measured at its first frame. mpg123 decodes free format, while FFmpeg n9.0.2 refuses to open the free-format fixture.
 
 ### Tags
 
@@ -387,11 +390,11 @@ Two further checks bind the window and the matrixing together:
 
 ### Opening a Stream
 
-`mp3.OpenStream` moves past an ID3v2 tag at the start of a stream, then searches for the first frame that the header after it confirms, as [Finding Frames](#finding-frames) describes. That frame's header fixes what the rest of the stream must keep. A Xing or Info tag frame that opens the stream holds no audio, so it is skipped, as mpg123 and FFmpeg skip it.
+`mp3.OpenStream` moves past the ID3v2, ID3v1 and APEv2 tags at the start of a stream, then searches for the first frame that the header after it confirms, as [Finding Frames](#finding-frames) describes. That frame's header fixes what the rest of the stream must keep. A Xing or Info tag frame that opens the stream holds no audio, so it is skipped, as mpg123 and FFmpeg skip it.
 
 ### Frame Decoding
 
-`layer3.Decoder` decodes a frame through every stage, granule by granule. It keeps what one frame passes to the next: the bit reservoir, the scalefactors that scfsi reuses, and each channel's filterbanks. A mono frame gives each sample to both channels, and samples are not clipped. The decoder refuses MPEG-2 and MPEG-2.5 frames, whose scalefactors it does not read.
+`layer3.Decoder` decodes a frame through every stage, granule by granule. It keeps what one frame passes to the next: the bit reservoir, the scalefactors that scfsi reuses, and each channel's filterbanks. A mono frame gives each sample to both channels, and samples are not clipped.
 
 The hybrid filterbank takes the block of each granule from Layer III: every subband long, with the normal, start or stop window, for long blocks, none for short blocks, and those below where short band 3 starts for mixed blocks.
 
@@ -401,9 +404,15 @@ A frame whose main data begins before the bytes the reservoir holds gives silenc
 
 The leading decoders differ here. FFmpeg and Symphonia silence only the granules whose main data is missing, and decode a second granule whose main data the reservoir holds. ISO's reference decoder produces nothing for such a frame, so its references start with the first frame whose main data is all there, and the conformance stream `l3_10204`, which starts midway, matches only when that frame starts from silent filterbanks. Silencing the whole frame matches the reference from its first frame on, while keeping the output's length and timing.
 
+### Tags and Damage Between Frames
+
+After each frame, the decoder expects the next frame of the stream. It steps over an ID3v2 tag, an ID3v1 tag or an APEv2 tag that starts with its header, as mpg123 does. A stream joined from several tracks carries their tags between its frames. Stepping over a tag keeps the bit reservoir, so tags change no sample.
+
+Any other bytes are damage or junk. The decoder passes over them to the next frame that the header after it confirms, and empties the bit reservoir, as mpg123 does on a resync. The bytes passed over may hold main data that the next frames reach back to, and decoding a frame from the wrong main data gives noise. Instead, a frame whose main data began before the junk gives silence, as [Missing Main Data](#missing-main-data) describes. On the joint stereo fixture, junk before a frame changes the samples of that frame and the three after it. A damaged header loses its own frame and changes the samples of the three after it.
+
 ### End of a Stream
 
-A stream ends at the first bytes that are not a frame of the stream that its first frame started. A trailing tag or the frames of another stream end it there. A last frame that the stream ends inside is decoded from the bytes it holds, with zeros for the rest, as FFmpeg does, since its granules' main data often lies wholly in the bytes it holds or in the frames before it. A last frame cut inside its side information ends the stream before it. A frame that fails to decode is reported, and the next read continues with the frame after it.
+A stream ends where the source ends, or where a frame of another stream starts. Such a frame has another version, layer or sampling frequency. mpg123 plays on across that change unless it is told not to. `Read` hands out samples at one rate, so the stream ends there. A last frame that the stream ends inside is decoded from the bytes it holds, with zeros for the rest, as FFmpeg does, since its granules' main data often lies wholly in the bytes it holds or in the frames before it. A last frame cut inside its side information ends the stream before it. A frame that fails to decode is reported, and the next read continues with the frame after it.
 
 ### Accuracy
 
@@ -414,6 +423,7 @@ The MPEG-1 fixtures decode against the 32-bit float output of mpg123 1.33.7 and 
 | 128 kbit/s joint stereo | 5.1e-8 | 5.1e-7 | 1.1e-7 | 1.1e-6 |
 | 64 kbit/s mono | 7.7e-8 | 7.1e-7 | 1.4e-7 | 1.1e-6 |
 | 128 kbit/s stereo with CRCs | 4.5e-8 | 3.0e-7 | 1.0e-7 | 1.1e-6 |
+| 400 kbit/s free format | 4.7e-8 | 3.2e-7 | Not decoded | Not decoded |
 
 Full accuracy allows an RMS difference of 8.8e-6 and a largest difference of 6.1e-5, so each fixture sits about 100 times inside it. The difference from mpg123 is at the rounding of its 32-bit output. FFmpeg's float decoder computes in 32 bits, which doubles its difference.
 

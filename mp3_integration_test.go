@@ -24,16 +24,23 @@ import (
 //
 // Every sample must be there, and the difference must stay within full accuracy. It must also
 // stay within twice the largest RMS difference measured from each tool, so a loss of precision
-// shows long before it breaks the bound.
+// shows long before it breaks the bound. ffmpeg refuses the free-format fixture, so only mpg123's
+// reference checks it.
 func TestReferences(t *testing.T) {
 	t.Parallel()
 
 	ceilings := map[string]float64{"mpg123": 1.6e-7, "ffmpeg": 3e-7}
+	fixtures := map[string][]string{
+		"mpeg1-joint": {"mpg123", "ffmpeg"}, "mpeg1-mono": {"mpg123", "ffmpeg"}, "protected": {"mpg123", "ffmpeg"},
+		"free": {"mpg123"},
+	}
 
-	for _, name := range []string{"mpeg1-joint", "mpeg1-mono", "protected"} {
+	for name, tools := range fixtures {
 		got := decodeFile(t, name+".mp3")
 
-		for tool, ceiling := range ceilings {
+		for _, tool := range tools {
+			ceiling := ceilings[tool]
+
 			t.Run(name+" "+tool, func(t *testing.T) {
 				t.Parallel()
 

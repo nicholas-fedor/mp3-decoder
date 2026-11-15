@@ -40,9 +40,9 @@ var (
 
 // OpenStream opens a stream for decoding from its start.
 //
-// It moves past an ID3v2 tag at the start, then searches for the first frame that the header
-// after it confirms. A Xing or Info tag frame that opens the stream holds no audio and is skipped.
-// The decoder does not close src.
+// It moves past the ID3v2, ID3v1 and APEv2 tags at the start, then searches for the first frame
+// that the header after it confirms. A Xing or Info tag frame that opens the stream holds no audio
+// and is skipped. The decoder does not close src.
 //
 // Parameters:
 //   - ctx: cancels the search for the first frame.
@@ -56,17 +56,16 @@ func OpenStream(ctx context.Context, src io.Reader) (*Decoder, error) {
 
 	decoder.source.reader = src
 
-	err := decoder.source.ensure(container.ID3v2HeaderSize)
-	if err != nil {
-		return nil, err
+	for stepped := true; stepped; {
+		var err error
+
+		stepped, err = decoder.skipTag()
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	err = decoder.source.discard(container.ID3v2Size(decoder.source.bytes()))
-	if err != nil {
-		return nil, err
-	}
-
-	err = decoder.findFirst(ctx)
+	err := decoder.findFirst(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -85,10 +84,12 @@ func OpenStream(ctx context.Context, src io.Reader) (*Decoder, error) {
 
 // Read decodes the next samples into dst.
 //
-// The stream ends at the first bytes that are not a frame of the stream that its first frame
-// started. A last frame that the stream ends inside is decoded from the bytes it holds, with zeros
-// for the rest, when it holds its side information. A mono stream gives each sample to both
-// channels. The samples are not clipped.
+// ID3v2, ID3v1 and APEv2 tags between frames are stepped over. Other bytes that are not a frame of
+// the stream, such as damage or junk, are passed over to the next frame that the header after it
+// confirms. A frame whose main data began before them gives silence. The stream ends where a frame
+// of another stream starts, or where src ends. A last frame that src ends inside is decoded from
+// the bytes it holds, with zeros for the rest, when it holds its side information. A mono stream
+// gives each sample to both channels. The samples are not clipped.
 //
 // Parameters:
 //   - dst: where the samples go, as left and right pairs.
@@ -129,14 +130,9 @@ func (d *Decoder) Read(dst [][2]float64) (int, error) {
 // Returns:
 //   - error: [io.EOF] at the end of the stream, or a read or decoding error.
 func (d *Decoder) decodeFrame() error {
-	err := d.source.ensure(frame.HeaderSize)
+	head, err := d.nextFrame()
 	if err != nil {
 		return err
-	}
-
-	head, ok := frame.Parse(d.source.bytes())
-	if !ok || !d.first.SameStream(head) {
-		return io.EOF
 	}
 
 	if head.Free {
@@ -173,39 +169,4 @@ func (d *Decoder) decodeFrame() error {
 	d.pending = d.pcm[:head.Samples()]
 
 	return nil
-}
-
-// findFirst searches the stream for its first confirmed frame and stops at it.
-//
-// Parameters:
-//   - ctx: cancels the search.
-//
-// Returns:
-//   - error: [ErrNoFrames], a read error, or the context's error.
-func (d *Decoder) findFirst(ctx context.Context) error {
-	for {
-		err := ctx.Err()
-		if err != nil {
-			return fmt.Errorf("find first frame: %w", err)
-		}
-
-		at, head, ok := frame.Find(d.source.bytes(), nil)
-		if ok {
-			d.first = head
-			d.source.consume(at)
-
-			return nil
-		}
-
-		if d.source.ended {
-			return ErrNoFrames
-		}
-
-		d.source.consume(at)
-
-		err = d.source.ensure(len(d.source.bytes()) + readSize)
-		if err != nil {
-			return err
-		}
-	}
 }
