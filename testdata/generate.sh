@@ -8,7 +8,7 @@
 #
 # Each reference holds every sample mpg123 or ffmpeg decodes from an MPEG-1 fixture as 32-bit
 # little-endian floats, interleaved by channel. ffmpeg refuses free format, so free.mp3 has only
-# mpg123's reference. Neither tool trims the encoder delay and padding,
+# mpg123's reference. Neither tool leaves out the encoder delay and padding,
 # and both skip the Info frame. versions.txt records the tools that wrote the files.
 #
 # golden.txt records the hash of the samples the decoder gives for each fixture. After regenerating

@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nicholas-fedor/mp3-decoder"
+	"github.com/nicholas-fedor/mp3-decoder/container"
 	"github.com/nicholas-fedor/mp3-decoder/frame"
 	"github.com/nicholas-fedor/mp3-decoder/internal/layer3"
 	"github.com/nicholas-fedor/mp3-decoder/internal/mp3test"
@@ -23,7 +24,7 @@ import (
 func TestTags(t *testing.T) {
 	t.Parallel()
 
-	data, starts := frameStarts(t, "mpeg1-joint.mp3")
+	data, starts := audioFrames(t, "mpeg1-joint.mp3")
 	want := decodeBytes(t, data)
 	tags := slices.Concat(
 		mp3test.ID3v2{Body: 300, Footer: true}.Bytes(), mp3test.ID3v1(), mp3test.APE{Items: 40, Header: true}.Bytes(),
@@ -50,13 +51,13 @@ func TestTags(t *testing.T) {
 // TestJunk checks that junk before the first frame changes no sample, and that junk between two
 // frames loses none.
 //
-// Frame 10 of the fixture reaches back to main data in the frames before it, so after junk before
-// it, it gives silence and the samples after it change. From the fourth frame after it on, they
-// match again.
+// The fixture's tenth frame reaches back to main data in the frames before it, so after junk
+// before it, it gives silence and the samples after it change. From the fourth frame after it on,
+// they match again.
 func TestJunk(t *testing.T) {
 	t.Parallel()
 
-	data, starts := frameStarts(t, "mpeg1-joint.mp3")
+	data, starts := audioFrames(t, "mpeg1-joint.mp3")
 	want := decodeBytes(t, data)
 
 	junk := make([]byte, 777)
@@ -66,15 +67,13 @@ func TestJunk(t *testing.T) {
 
 	assert.Equal(t, want, decodeBytes(t, slices.Concat(junk, data)), "junk before the first frame")
 
-	got := decodeBytes(t, insert(data, starts[10], junk))
-
-	// The first frame holds the Info tag, so frame 10 gives samples from the ninth frame's on.
+	got := decodeBytes(t, insert(data, starts[9], junk))
 	before, after := 9*frame.MaxSamples, 13*frame.MaxSamples
 
 	require.Len(t, got, len(want))
 	assert.Equal(t, want[:before], got[:before], "before the junk")
 	assert.NotEqual(t, want[before:after], got[before:after], "the frames after the junk decode as without it")
-	assert.Equal(t, want[after:], got[after:], "from the fourth frame after frame 10")
+	assert.Equal(t, want[after:], got[after:], "from the fourth frame after the tenth")
 }
 
 // TestDamagedHeader checks that a frame whose header is damaged is lost alone, and that decoding
@@ -85,18 +84,18 @@ func TestJunk(t *testing.T) {
 func TestDamagedHeader(t *testing.T) {
 	t.Parallel()
 
-	data, starts := frameStarts(t, "mpeg1-joint.mp3")
+	data, starts := audioFrames(t, "mpeg1-joint.mp3")
 	want := decodeBytes(t, data)
 
 	damaged := slices.Clone(data)
-	clear(damaged[starts[10] : starts[10]+frame.HeaderSize])
+	clear(damaged[starts[9] : starts[9]+frame.HeaderSize])
 
 	got := decodeBytes(t, damaged)
 	before, after := 9*frame.MaxSamples, 13*frame.MaxSamples
 
 	require.Len(t, got, len(want)-frame.MaxSamples)
 	assert.Equal(t, want[:before], got[:before], "before the damage")
-	assert.Equal(t, want[after:], got[after-frame.MaxSamples:], "from the fourth frame after frame 10")
+	assert.Equal(t, want[after:], got[after-frame.MaxSamples:], "from the fourth frame after the tenth")
 }
 
 // TestAnotherStream checks that the stream ends where the frames of another stream start, here
@@ -104,8 +103,8 @@ func TestDamagedHeader(t *testing.T) {
 func TestAnotherStream(t *testing.T) {
 	t.Parallel()
 
-	first, _ := frameStarts(t, "mpeg1-joint.mp3")
-	second, _ := frameStarts(t, "mpeg2.mp3")
+	first, _ := audioFrames(t, "mpeg1-joint.mp3")
+	second, _ := audioFrames(t, "mpeg2.mp3")
 
 	assert.Equal(t, decodeBytes(t, first), decodeBytes(t, slices.Concat(first, second)))
 }
@@ -127,7 +126,7 @@ func TestJoin(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			data, starts := frameStarts(t, name)
+			data, starts := audioFrames(t, name)
 			want := decodeBytes(t, data)
 
 			last := len(starts) - 2
@@ -206,10 +205,11 @@ func silentFrames(tb testing.TB, data []byte, starts []int) int {
 	return len(starts)
 }
 
-// frameStarts reads a fixture and finds where each of its frames starts, its Info frame first.
+// audioFrames reads a fixture without its tag frame and finds where each of its frames starts.
 //
-// The frames of a free-format fixture take the bitrate measured at its first frame.
-func frameStarts(tb testing.TB, name string) ([]byte, []int) {
+// Without the tag frame, decoding leaves out none of the samples the encoder added. The frames of a
+// free-format fixture take the bitrate measured at its first frame.
+func audioFrames(tb testing.TB, name string) ([]byte, []int) {
 	tb.Helper()
 
 	data, err := os.ReadFile("testdata/" + name)
@@ -218,9 +218,15 @@ func frameStarts(tb testing.TB, name string) ([]byte, []int) {
 	at, first, ok := frame.Find(data, nil)
 	require.True(tb, ok)
 
+	if _, tagged := container.ParseInfo(first, data[at:]); tagged {
+		at += first.Size()
+	}
+
+	data = data[at:]
+
 	var starts []int
 
-	for at < len(data) {
+	for at = 0; at < len(data); {
 		head, ok := frame.Parse(data[at:])
 		require.True(tb, ok)
 

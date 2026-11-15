@@ -59,6 +59,7 @@ This document explains how the decoder is built and why, part by part. Each sect
   - [Missing Main Data](#missing-main-data)
   - [Tags and Damage Between Frames](#tags-and-damage-between-frames)
   - [End of a Stream](#end-of-a-stream)
+  - [Gapless Playback](#gapless-playback)
   - [Accuracy](#accuracy)
 - [Performance](#performance)
 
@@ -416,9 +417,21 @@ Any other bytes are damage or junk. The decoder passes over them to the next fra
 
 A stream ends where the source ends, or where a frame of another stream starts. Such a frame has another version, layer or sampling frequency. mpg123 plays on across that change unless it is told not to. `Read` hands out samples at one rate, so the stream ends there. A last frame that the stream ends inside is decoded from the bytes it holds, with zeros for the rest, as FFmpeg does, since its granules' main data often lies wholly in the bytes it holds or in the frames before it. A last frame cut inside its side information ends the stream before it. A frame that fails to decode is reported, and the next read continues with the frame after it.
 
+### Gapless Playback
+
+An encoder adds samples at the start of a stream, its delay, and pads the last frame. The decoder's filterbanks delay its output by a further 529 samples. When the tag frame's LAME extension gives the delay and padding, the decoder leaves out the samples they account for, so a track decodes to exactly the samples its encoder took in, and the tracks of an album play without gaps.
+
+| Samples left out | mpg123 | FFmpeg | This decoder |
+| --- | --- | --- | --- |
+| At the start | The delay plus 529 | The delay plus 529 | The delay plus 529 |
+| At the end, with the tag's frame count | Every sample from the padding less 529 before the counted frames end, since decoding stops there | The padding less 529, before the counted frames end | The padding less 529, before the counted frames end |
+| At the end, without a frame count | None, and none at the start either | None | None |
+
+The decoder follows FFmpeg, whose frames past the count still play, so a stream that runs on past its tag's count loses no audio. mpg123's gapless output of each tagged fixture is exactly the samples of every frame less those, and each fixture decodes to exactly the 0.5 s its encoder took in.
+
 ### Accuracy
 
-The MPEG-1 fixtures decode against the 32-bit float output of mpg123 1.33.7 and FFmpeg n9.0.2, with neither trimming the encoder delay:
+The MPEG-1 fixtures decode against the 32-bit float output of mpg123 1.33.7 and FFmpeg n9.0.2, with neither leaving out the encoder delay:
 
 | Fixture | RMS difference from mpg123 | Largest difference from mpg123 | RMS difference from FFmpeg | Largest difference from FFmpeg |
 | --- | --- | --- | --- | --- |

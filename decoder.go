@@ -28,6 +28,10 @@ type Decoder struct {
 	cut [frame.MaxSize]byte
 	// first is the header of the stream's first frame.
 	first frame.Header
+	// padding holds the samples the encoder added, which are left out.
+	padding encoderPadding
+	// decoded counts the samples of the frames decoded, those left out among them.
+	decoded int64
 }
 
 // Errors from opening a stream.
@@ -42,7 +46,8 @@ var (
 //
 // It moves past the ID3v2, ID3v1 and APEv2 tags at the start, then searches for the first frame
 // that the header after it confirms. A Xing or Info tag frame that opens the stream holds no audio
-// and is skipped. The decoder does not close src.
+// and is skipped. When its LAME extension gives the encoder delay and padding, the samples the
+// encoder added are left out, as Read describes. The decoder does not close src.
 //
 // Parameters:
 //   - ctx: cancels the search for the first frame.
@@ -75,7 +80,8 @@ func OpenStream(ctx context.Context, src io.Reader) (*Decoder, error) {
 	}
 
 	// The header that confirmed the first frame follows it, so the whole frame is buffered.
-	if _, ok := container.ParseInfo(decoder.first, decoder.source.bytes()[:decoder.first.Size()]); ok {
+	if info, ok := container.ParseInfo(decoder.first, decoder.source.bytes()[:decoder.first.Size()]); ok {
+		decoder.padding = paddingOf(info, decoder.first)
 		decoder.source.consume(decoder.first.Size())
 	}
 
@@ -90,6 +96,11 @@ func OpenStream(ctx context.Context, src io.Reader) (*Decoder, error) {
 // of another stream starts, or where src ends. A last frame that src ends inside is decoded from
 // the bytes it holds, with zeros for the rest, when it holds its side information. A mono stream
 // gives each sample to both channels. The samples are not clipped.
+//
+// When the stream's tag gives the encoder delay and padding, the samples the encoder added are left
+// out. At the start these are the encoder delay and the 529 samples by which decoding delays the
+// audio. At the end they are the padding, less those 529 samples, before the last frame the tag
+// counts ends. The samples that remain are those the encoder took in.
 //
 // Parameters:
 //   - dst: where the samples go, as left and right pairs.
@@ -162,11 +173,17 @@ func (d *Decoder) decodeFrame() error {
 	err = d.layer3.Decode(d.pcm[:], head, data[:size])
 	d.source.consume(held)
 
+	at := d.decoded
+
+	d.decoded += int64(head.Samples())
+
 	if err != nil {
 		return fmt.Errorf("decode frame: %w", err)
 	}
 
-	d.pending = d.pcm[:head.Samples()]
+	from, to := d.padding.keep(at, head.Samples())
+
+	d.pending = d.pcm[from:to]
 
 	return nil
 }

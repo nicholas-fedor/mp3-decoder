@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"slices"
 	"testing"
 	"testing/iotest"
 
@@ -16,12 +17,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nicholas-fedor/mp3-decoder"
+	"github.com/nicholas-fedor/mp3-decoder/container"
+	"github.com/nicholas-fedor/mp3-decoder/frame"
 	"github.com/nicholas-fedor/mp3-decoder/internal/conformance"
 )
 
-// TestReferences decodes each MPEG-1 fixture and checks it against the references mpg123 and
-// ffmpeg decoded, channel by channel.
+// TestReferences decodes each MPEG-1 fixture without its tag frame and checks it against the
+// references mpg123 and ffmpeg decoded, channel by channel.
 //
+// Neither tool leaves samples out of the references, and without the tag frame the decoder leaves
+// out none either.
 // Every sample must be there, and the difference must stay within full accuracy. It must also
 // stay within twice the largest RMS difference measured from each tool, so a loss of precision
 // shows long before it breaks the bound. ffmpeg refuses the free-format fixture, so only mpg123's
@@ -36,7 +41,8 @@ func TestReferences(t *testing.T) {
 	}
 
 	for name, tools := range fixtures {
-		got := decodeFile(t, name+".mp3")
+		audio, _ := audioFrames(t, name+".mp3")
+		got := decodeBytes(t, audio)
 
 		for _, tool := range tools {
 			ceiling := ceilings[tool]
@@ -59,6 +65,46 @@ func TestReferences(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestGapless checks that each fixture with a LAME tag decodes to exactly the 0.5 s of samples
+// its encoder took in, and the fixture without one to every sample.
+//
+// The samples are those of every frame from the encoder delay and the 529 samples of decoder delay
+// on, up to the padding less those 529 samples before the end of the frames the tag counts. That
+// is what mpg123 leaves out, and its gapless output of each fixture is exactly those samples.
+func TestGapless(t *testing.T) {
+	t.Parallel()
+
+	samples := map[string]int{
+		"mpeg1-joint.mp3": 22050, "mpeg1-mono.mp3": 22050, "protected.mp3": 22050, "free.mp3": 22050,
+		"mpeg2.mp3": 11025, "mpeg25.mp3": 5184,
+	}
+
+	for name, want := range samples {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got := decodeFile(t, name)
+			audio, _ := audioFrames(t, name)
+			whole := decodeBytes(t, audio)
+
+			data, err := os.ReadFile("testdata/" + name)
+			require.NoError(t, err)
+
+			at, head, ok := frame.Find(data, nil)
+			require.True(t, ok)
+
+			from, to := 0, len(whole)
+			if info, tagged := container.ParseInfo(head, data[at:]); tagged {
+				from = info.Delay + 529
+				to = int(info.Frames)*head.Samples() - info.Padding + 529
+			}
+
+			require.Len(t, got, want)
+			assert.True(t, slices.Equal(whole[from:to], got), "the samples kept")
+		})
 	}
 }
 

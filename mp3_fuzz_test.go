@@ -138,7 +138,7 @@ func FuzzJoin(f *testing.F) {
 	fixtures := make([]fixture, 0, len(names))
 
 	for _, name := range names {
-		data, starts := frameStarts(f, name)
+		data, starts := audioFrames(f, name)
 
 		// A first frame needs the header after it to confirm it, and a free-format one needs two.
 		last := len(starts) - 2
