@@ -4,6 +4,7 @@
 package hybrid
 
 //go:generate go test -run ^TestHybridTables$ -update
+//go:generate go test -run ^TestIMDCTKernels$ -update
 
 // Window is the window the long blocks of a granule take.
 type Window uint8

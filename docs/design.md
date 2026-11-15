@@ -352,9 +352,11 @@ An IMDCT of 2n lines gives 4n samples, 36 from 18 for long blocks and 12 from 6 
 | i from n to 3n-1 | -c(3n-1-i) |
 | i from 3n on | -c(i-3n) |
 
-The DCT-IV comes from a DCT-II of the same length. Since 2 cos(α) cos(β) is cos(β-α) + cos(β+α), the lines scaled by 1/(2 cos(π(2k+1)/(8n))) have a DCT-II D with c(j) = D(j) + D(j+1), where D(2n) is 0. Byeong Gi Lee's split, as in [Fast Matrixing](#fast-matrixing), turns that DCT-II into two of n points, 9 for long blocks and 3 for short blocks, which are summed directly. A long block takes 189 products instead of 648, and a short window 27 instead of 72. The direct sums stay in the tests as the oracles.
+The DCT-IV comes from a DCT-II of the same length. Since 2 cos(α) cos(β) is cos(β-α) + cos(β+α), the lines scaled by 1/(2 cos(π(2k+1)/(8n))) have a DCT-II D with c(j) = D(j) + D(j+1), where D(2n) is 0. Byeong Gi Lee's split, as in [Fast Matrixing](#fast-matrixing), turns that DCT-II into two of n points, 9 for long blocks and 3 for short blocks, which are summed directly. Each of those folds its values in pairs, since value k and value n-1-k meet the same cosine, the second with the sign (-1)^m. An even output sums the pairs' sums and adds or takes the middle value, and an odd output sums the pairs' differences. A long block takes 99 products instead of 648, and a short window 15 instead of 72. The direct sums stay in the tests as the oracles.
 
-The scaling reaches 11.5 for long blocks, so the fast form rounds a little more. Against an exact sum, the largest error of a long block is 8.7e-15 and of a short block 3.1e-15. That is about 4 million times below the 24-bit noise floor, and no conformance stream's RMS or maximum difference changed in its recorded digits.
+The kernels `imdct36` and `imdct12` run as straight-line code that the tests generate into `imdct_gen.go` from a loop form of the same steps, and they check that the kernels give its samples bit for bit. The loop form never adds a value to a 0 it starts from, since +0 plus -0 is +0, so the unrolled kernels give the same signs of 0.
+
+The scaling reaches 11.5 for long blocks, so the fast form rounds a little more. Against an exact sum, the largest error of a long block is 7.7e-15 and of a short block 3.2e-15. That is about 4 million times below the 24-bit noise floor, and no conformance stream's RMS or maximum difference changed in its recorded digits.
 
 #### Mixed Blocks at 8 kHz
 
@@ -393,7 +395,7 @@ The filterbank follows the published flow directly:
 2. V becomes the newest of the 16 vectors kept, and the oldest is dropped.
 3. Output sample j sums 16 window taps. For each of the 8 groups g, it takes tap D(64g+j) times value j of vector 2g, and tap D(64g+32+j) times value 32+j of vector 2g+1, counting vectors from the newest.
 
-The 16 vectors live in a ring of 1024 values, so a call writes 64 values instead of shifting all 1024.
+The 16 vectors live in a ring of 1024 values, so a call writes 64 values instead of shifting all 1024. The ring is kept twice over, so the window reads each group's values in one run without wrapping around.
 
 #### Fast Matrixing
 
@@ -406,7 +408,7 @@ Matrixing computes V from a 32-point DCT of the subband samples, X(m), the sum o
 | i from 17 to 47 | -X(48-i) |
 | i from 48 to 63 | -X(i-48) |
 
-Byeong Gi Lee's algorithm computes the DCT. It splits n values into the sums x(k) + x(n-1-k) and the differences x(k) - x(n-1-k), each difference scaled by 1/(2 cos(π(2k+1)/(2n))). Two DCTs of n/2 points follow. The even outputs are those of the first. Each odd output adds two neighbouring outputs of the second. Down to 2 points, that takes 80 products instead of the 2048 of the direct sum. The direct sum stays in the tests as the oracle.
+Byeong Gi Lee's algorithm computes the DCT. It splits n values into the sums x(k) + x(n-1-k) and the differences x(k) - x(n-1-k), each difference scaled by 1/(2 cos(π(2k+1)/(2n))). Two DCTs of n/2 points follow. The even outputs are those of the first. Each odd output adds two neighboring outputs of the second. Down to 2 points, that takes 80 products instead of the 2048 of the direct sum. The direct sum stays in the tests as the oracle. The DCT runs as straight-line code that the tests generate from the recursion into `dct_gen.go`, and they check that it gives the recursion's outputs bit for bit.
 
 The scaling reaches 10.2 at 32 points, so the fast form rounds a little more than the direct sum. The largest error of an impulse response rose from 6.7e-16 to 1.3e-15. That is 25 million times below the 24-bit noise floor, and no conformance stream's RMS or maximum difference changed in its recorded digits.
 
@@ -513,7 +515,7 @@ The MPEG-1 fixtures decode against the 32-bit float output of mpg123 1.33.7 and 
 
 | Fixture | RMS difference from mpg123 | Largest difference from mpg123 | RMS difference from FFmpeg | Largest difference from FFmpeg |
 | --- | --- | --- | --- | --- |
-| 128 kbit/s joint stereo | 5.1e-8 | 5.1e-7 | 1.1e-7 | 1.1e-6 |
+| VBR joint stereo, LAME -V 2 | 5.1e-8 | 5.1e-7 | 1.1e-7 | 1.1e-6 |
 | 64 kbit/s mono | 7.7e-8 | 7.1e-7 | 1.4e-7 | 1.1e-6 |
 | 128 kbit/s stereo with CRCs | 4.5e-8 | 3.0e-7 | 1.0e-7 | 1.1e-6 |
 | 400 kbit/s free format | 4.7e-8 | 3.2e-7 | Not decoded | Not decoded |
@@ -524,18 +526,35 @@ The ISO conformance streams are measured against their 24-bit references, as [Co
 
 ## Performance
 
-Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates, and `TestAllocations` checks that `Read` and `Seek` allocate nothing once a stream has started.
+Measured with `go test -bench` on an AMD Ryzen 9 7950X. The joint stereo fixture is 0.5 s of a 440 Hz tone with clicks, which LAME encoded at -V 2. No stage allocates, and `TestAllocations` checks that `Read` and `Seek` allocate nothing once a stream has started.
 
 | Stage | Input | Time |
 | --- | --- | --- |
 | big_values pairs | Random bits | 10 to 15 ns a pair |
-| Main data from the bit reservoir | A 128 kbit/s LAME file | About 15 ns a frame |
-| Scalefactors and spectral values | A 128 kbit/s LAME file | About 390 ns a granule of one channel |
-| Requantization | A 128 kbit/s LAME file | About 130 ns a granule of one channel |
-| Stereo | A 128 kbit/s LAME joint stereo file | About 230 ns a granule of both channels |
+| Main data from the bit reservoir | The joint stereo fixture | About 15 ns a frame |
+| Scalefactors and spectral values | The joint stereo fixture | About 390 ns a granule of one channel |
+| Requantization | The joint stereo fixture | About 130 ns a granule of one channel |
+| Stereo | The joint stereo fixture | About 230 ns a granule of both channels |
 | Reordering | A granule of short blocks | About 310 ns |
-| Hybrid filterbank, with the fast IMDCT | Random lines | About 3.2 µs a granule of long blocks, and 2.9 µs of short blocks, from 5.9 µs and 3.8 µs with the direct sums |
-| Polyphase synthesis, with the fast DCT | Random subband samples | About 7.0 µs a granule of one channel, from 19 µs with direct matrixing |
-| A frame through every stage | A 128 kbit/s LAME joint stereo file | About 45 µs a frame |
-| Opening and decoding a whole stream | A 128 kbit/s LAME joint stereo file | About 510 times faster than real time |
-| A seek, then reading the frame there | A 128 kbit/s LAME joint stereo file, indexed | About 470 µs, mostly the 9 frames decoded before the sample |
+| Hybrid filterbank, with the fast IMDCT | Random lines | About 1.8 µs a granule of long blocks, and 1.7 µs of short blocks |
+| Polyphase synthesis, with the fast DCT | Random subband samples | About 3.3 µs a granule of one channel |
+| A frame through every stage | The joint stereo fixture | About 24 µs a frame |
+| Opening and decoding a whole stream | The joint stereo fixture | About 890 times faster than real time |
+| A seek, then reading the frame there | The joint stereo fixture, indexed | About 265 µs, mostly the 9 frames decoded before the sample |
+
+### Measured Changes
+
+Each change to the transforms was measured on its own, on the joint stereo fixture. A change that keeps the order of every sum keeps the output bit for bit, and the others were recorded with new hashes.
+
+| Change | Measured effect | Kept |
+| --- | --- | --- |
+| Synthesis matrixing through Lee's 32-point DCT | Synthesis from 19 µs to 7.0 µs a granule | Yes |
+| IMDCT through a DCT-IV, a DCT-II and Lee's split | Long blocks from 5.9 µs to 3.2 µs, short blocks from 3.8 µs to 2.9 µs | Yes |
+| Synthesis ring kept twice over, read without wrapping | Synthesis from 7.0 µs to 5.5 µs, the same bits | Yes |
+| The 32-point DCT generated as straight-line code | Synthesis from 5.5 µs to 3.3 µs, the same bits | Yes |
+| The DCTs of the IMDCT folded in pairs | Long blocks from 3.1 µs to 2.9 µs, short blocks slower | Yes, for the kernels below |
+| The IMDCTs generated as straight-line code | Long blocks from 2.9 µs to 1.8 µs, short blocks from 3.0 µs to 1.7 µs | Yes |
+| Synthesis windowing with each sample's sum in a register | Synthesis from 3.3 µs to 4.3 µs, since each addition waits on the one before | No |
+| Skipping the IMDCT of subbands whose lines are all 0 | Not built. Its gain depends on how many subbands are silent. The fixtures, a tone with clicks, leave about 21 of 32 silent, far more than music, so they cannot measure it fairly | No |
+
+The synthesis window now takes about 37% of decoding. It runs 32 independent sums near one multiply-add a cycle, the most scalar Go gives.

@@ -45,37 +45,6 @@ func TestSynthesize(t *testing.T) {
 	}
 }
 
-// TestDCT checks the DCT of random values of every length it takes against the direct sum of
-// x(k) cos(π m(2k+1)/(2n)).
-func TestDCT(t *testing.T) {
-	t.Parallel()
-
-	rng := rand.New(rand.NewPCG(49, 50))
-
-	for points := 2; points <= Subbands; points *= 2 {
-		values := make([]float64, points)
-		for k := range values {
-			values[k] = 2*rng.Float64() - 1
-		}
-
-		want := make([]float64, points)
-
-		for m := range want {
-			for k, value := range values {
-				want[m] += value * math.Cos(math.Pi*float64(m*(2*k+1))/float64(2*points))
-			}
-		}
-
-		var scratch [dctScratch]float64
-
-		dct(values, scratch[:])
-
-		for m := range want {
-			assert.InDelta(t, want[m], values[m], 1e-13, "%d points, output %d", points, m)
-		}
-	}
-}
-
 // TestImpulse checks the impulse response of each subband.
 //
 // A 1 in subband k followed by silence gives D(n) cos(π/64 (16 + n mod 64)(2k+1)) for each of the

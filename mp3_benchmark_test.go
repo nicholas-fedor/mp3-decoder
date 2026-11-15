@@ -14,8 +14,8 @@ import (
 	"github.com/nicholas-fedor/mp3-decoder"
 )
 
-// BenchmarkRead measures opening and decoding a 128 kbit/s joint stereo file that LAME encoded,
-// 0.55 s of audio, and reports how many times faster than real time it decodes.
+// BenchmarkRead measures opening and decoding a joint stereo file that LAME encoded at -V 2, 0.5 s
+// of a tone with clicks, and reports how many times faster than real time it decodes.
 func BenchmarkRead(b *testing.B) {
 	data, err := os.ReadFile("testdata/mpeg1-joint.mp3")
 	require.NoError(b, err)
@@ -43,8 +43,8 @@ func BenchmarkRead(b *testing.B) {
 }
 
 // BenchmarkSeek measures seeking a file opened from memory to samples spread over it, then reading
-// the frame at each. The file is a 128 kbit/s joint stereo fixture joined to three copies of
-// itself, which the walk in Open indexes.
+// the frame at each. The file is the joint stereo fixture LAME encoded at -V 2, joined to three
+// copies of itself, which the walk in Open indexes.
 func BenchmarkSeek(b *testing.B) {
 	data, err := os.ReadFile("testdata/mpeg1-joint.mp3")
 	require.NoError(b, err)

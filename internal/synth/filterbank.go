@@ -4,14 +4,15 @@
 package synth
 
 //go:generate go test -run ^TestSynthTables$ -update
+//go:generate go test -run ^TestDCTKernel$ -update
 
 // Filterbank is the polyphase synthesis filterbank of one channel.
 //
 // It keeps the last 16 vectors that matrixing gave, which the window reaches back over.
 type Filterbank struct {
-	// history holds the last 16 vectors of 64 values, the newest starting at newest and the older
-	// ones after it, wrapping around.
-	history [historySize]float64
+	// history holds the last 16 vectors of 64 values twice over, the newest starting at newest and
+	// the older ones after it, so the window reads them without wrapping around.
+	history [2 * historySize]float64
 	// newest is where the newest vector starts in history.
 	newest int
 }
@@ -31,13 +32,11 @@ const (
 	windowGroups = windowTaps / vectorSize
 	// dctFactors is the number of factors the 32-point DCT takes, 16 + 8 + 4 + 2 + 1.
 	dctFactors = Subbands - 1
-	// dctScratch is the number of values the 32-point DCT keeps while it runs, 32 + 16 + 8 + 4 + 2.
-	dctScratch = 2*Subbands - 2
 )
 
 // Reset forgets the history, as at the start of a stream.
 func (f *Filterbank) Reset() {
-	f.history = [historySize]float64{}
+	f.history = [2 * historySize]float64{}
 	f.newest = 0
 }
 
@@ -55,20 +54,24 @@ func (f *Filterbank) Reset() {
 func (f *Filterbank) Synthesize(dst, samples *[Subbands]float64) {
 	f.newest = (f.newest - vectorSize) & (historySize - 1)
 
-	matrixing((*[vectorSize]float64)(f.history[f.newest:f.newest+vectorSize]), samples)
+	vector := (*[vectorSize]float64)(f.history[f.newest:])
+	matrixing(vector, samples)
+	copy(f.history[f.newest+historySize:], vector[:])
 
-	for sample := range dst {
-		var sum float64
+	*dst = [Subbands]float64{}
 
-		for group := range windowGroups {
-			even := f.newest + 2*vectorSize*group + sample
-			odd := even + vectorSize + Subbands
+	// The groups run outermost, so the 32 sums grow side by side rather than each waiting on its last
+	// addition.
+	for group := range windowGroups {
+		at := f.newest + 2*vectorSize*group
+		even := (*[Subbands]float64)(f.history[at:])
+		odd := (*[Subbands]float64)(f.history[at+vectorSize+Subbands:])
+		taps := (*[vectorSize]float64)(window[vectorSize*group:])
 
-			sum += float64(f.history[even&(historySize-1)] * window[vectorSize*group+sample])
-			sum += float64(f.history[odd&(historySize-1)] * window[vectorSize*group+Subbands+sample])
+		for sample := range dst {
+			dst[sample] += float64(even[sample] * taps[sample])
+			dst[sample] += float64(odd[sample] * taps[Subbands+sample])
 		}
-
-		dst[sample] = sum
 	}
 }
 
@@ -82,11 +85,9 @@ func (f *Filterbank) Synthesize(dst, samples *[Subbands]float64) {
 //   - vector: the 64 values.
 //   - samples: one sample of each subband.
 func matrixing(vector *[vectorSize]float64, samples *[Subbands]float64) {
-	var scratch [dctScratch]float64
-
 	spectrum := *samples
 
-	dct(spectrum[:], scratch[:])
+	dct32(&spectrum)
 
 	const (
 		// fold is the index of V whose angle is π/2, which is 0.
@@ -106,41 +107,4 @@ func matrixing(vector *[vectorSize]float64, samples *[Subbands]float64) {
 	for i := mirror; i < vectorSize; i++ {
 		vector[i] = -spectrum[i-mirror]
 	}
-}
-
-// dct turns values into their DCT in place, by Byeong Gi Lee's algorithm.
-//
-// Of n values x(k), it gives X(m), the sum over k of x(k) cos(π m(2k+1)/(2n)). It splits them into
-// the sums g(k) = x(k) + x(n-1-k) and the scaled differences h(k) = (x(k) - x(n-1-k)) /
-// (2 cos(π(2k+1)/(2n))), whose DCTs of n/2 points G and H give X(2m) = G(m) and
-// X(2m+1) = H(m) + H(m+1), with H(n/2) taken as 0.
-//
-// Parameters:
-//   - values: the values, a power of two of them up to 32.
-//   - scratch: room for the values of every split, 2n - 2 of them.
-func dct(values, scratch []float64) {
-	points := len(values)
-	half := points >> 1
-	split := scratch[:points]
-	factors := lee[Subbands-points : Subbands-half]
-
-	for k := range half {
-		a, b := values[k], values[points-1-k]
-
-		split[k] = a + b
-		split[half+k] = float64((a - b) * factors[k])
-	}
-
-	if half > 1 {
-		dct(split[:half], scratch[points:])
-		dct(split[half:], scratch[points:])
-	}
-
-	for m := range half - 1 {
-		values[2*m] = split[m]
-		values[2*m+1] = split[half+m] + split[half+m+1]
-	}
-
-	values[points-2] = split[half-1]
-	values[points-1] = split[points-1]
 }

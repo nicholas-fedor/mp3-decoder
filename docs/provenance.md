@@ -43,7 +43,7 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `layer3`: short block reordering | Sieler and Sperschneider, section 4.3.10. FFmpeg, libavcodec/mpegaudiodec_template.c (reorder_block) |
 | `hybrid`: alias reduction butterflies and coefficients | Sieler and Sperschneider, section 4.3.12.1 and Table 60. dist10, lsf/decoder/decode.c (III_antialias) |
 | `hybrid`: IMDCT, windows, overlap-add and frequency inversion | Sieler and Sperschneider, sections 4.3.12.2 to 4.3.12.5, whose copy lacks the equation images. dist10, lsf/decoder/decode.c (inv_mdct and III_hybrid) |
-| `hybrid`: the IMDCT through a DCT-IV, from a DCT-II split by Byeong Gi Lee's algorithm | The folding onto the DCT-IV and the DCT-II with neighbouring outputs added follow from the cosine's symmetries and product-to-sum identity. B. G. Lee 1984, in the form of Project Nayuki's FastDctLee (MIT), for the split |
+| `hybrid`: the IMDCT through a DCT-IV, from a DCT-II split by Byeong Gi Lee's algorithm | The folding onto the DCT-IV and the DCT-II with neighboring outputs added follow from the cosine's symmetries and product-to-sum identity. B. G. Lee 1984, in the form of Project Nayuki's FastDctLee (MIT), for the split |
 | `hybrid`: 4 long subbands in mixed blocks at 8 kHz | Sieler and Sperschneider, section 4.3.12.1 (sb_amount) |
 | `synth`: matrixing, the V vector and the windowed sum | Sieler and Sperschneider, section 4.3.12.6 and Figure 2. dist10, lsf/decoder/decode.c (SubBandSynthesis) |
 | `synth`: matrixing through a 32-point DCT, by Byeong Gi Lee's algorithm | B. G. Lee 1984, in the form of Project Nayuki's FastDctLee (MIT). The folding of V onto the DCT follows from the cosine's symmetries |

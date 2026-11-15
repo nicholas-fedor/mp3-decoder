@@ -14,8 +14,8 @@ import (
 	"github.com/nicholas-fedor/mp3-decoder/internal/bits"
 )
 
-// BenchmarkMainData measures handing out the main data of each frame of a 128 kbit/s joint stereo
-// file that LAME encoded.
+// BenchmarkMainData measures handing out the main data of each frame of a joint stereo file that
+// LAME encoded at -V 2.
 func BenchmarkMainData(b *testing.B) {
 	data, err := os.ReadFile("../../testdata/mpeg1-joint.mp3")
 	require.NoError(b, err)
@@ -52,7 +52,7 @@ func BenchmarkMainData(b *testing.B) {
 }
 
 // BenchmarkSpectrum measures reading the scalefactors and decoding the spectral values of each
-// channel's granule of a 128 kbit/s joint stereo file that LAME encoded.
+// channel's granule of a joint stereo file that LAME encoded at -V 2.
 func BenchmarkSpectrum(b *testing.B) {
 	data, err := os.ReadFile("../../testdata/mpeg1-joint.mp3")
 	require.NoError(b, err)
@@ -114,8 +114,8 @@ func BenchmarkSpectrum(b *testing.B) {
 	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(granules), "ns/granule")
 }
 
-// BenchmarkRequantize measures requantizing each channel's granule of a 128 kbit/s joint stereo
-// file that LAME encoded.
+// BenchmarkRequantize measures requantizing each channel's granule of a joint stereo file that
+// LAME encoded at -V 2.
 func BenchmarkRequantize(b *testing.B) {
 	data, err := os.ReadFile("../../testdata/mpeg1-joint.mp3")
 	require.NoError(b, err)
@@ -177,8 +177,8 @@ func BenchmarkRequantize(b *testing.B) {
 	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N*len(granules)), "ns/granule")
 }
 
-// BenchmarkStereo measures restoring the left and right lines of each granule of a 128 kbit/s joint
-// stereo file that LAME encoded, most of whose granules use mid/side stereo.
+// BenchmarkStereo measures restoring the left and right lines of each granule of a joint stereo
+// file that LAME encoded at -V 2, most of whose granules use mid/side stereo.
 func BenchmarkStereo(b *testing.B) {
 	data, err := os.ReadFile("../../testdata/mpeg1-joint.mp3")
 	require.NoError(b, err)
@@ -258,8 +258,8 @@ func BenchmarkReorder(b *testing.B) {
 	}
 }
 
-// BenchmarkDecode measures decoding each frame of a 128 kbit/s joint stereo file that LAME
-// encoded through every stage, from its bytes to its PCM samples.
+// BenchmarkDecode measures decoding each frame of a joint stereo file that LAME encoded at -V 2
+// through every stage, from its bytes to its PCM samples.
 func BenchmarkDecode(b *testing.B) {
 	data, err := os.ReadFile("../../testdata/mpeg1-joint.mp3")
 	require.NoError(b, err)

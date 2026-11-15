@@ -24,11 +24,11 @@ import (
 // tables holds every generated table.
 type tables struct {
 	longWindows  [3][longPoints]float64
-	longCosines  [longTerms * longTerms]float64
+	longCosines  [longTerms * longPairs]float64
 	longScale    [2 * longTerms]float64
 	shortWindow  [shortPoints]float64
 	longSplit    [longTerms]float64
-	shortCosines [shortTerms * shortTerms]float64
+	shortCosines [shortTerms * shortPairs]float64
 	aliasCs      [aliasButterflies]float64
 	aliasCa      [aliasButterflies]float64
 	shortScale   [2 * shortTerms]float64
@@ -123,8 +123,10 @@ func TestHybridTables(t *testing.T) {
 			assert.InDelta(t, 0.5, split*trig.Cos(2*k+1, 4*terms), 2.3e-16, "%d terms, split %d", terms, k)
 		}
 
+		pairs := len(transform.cosines) / terms
+
 		for at, cosine := range transform.cosines {
-			angle := math.Pi * float64(at/terms*(2*(at%terms)+1)%(4*terms)) / float64(2*terms)
+			angle := math.Pi * float64(at/pairs*(2*(at%pairs)+1)%(4*terms)) / float64(2*terms)
 			assert.InDelta(t, math.Cos(angle), cosine, 1e-15, "%d terms, cosine %d", terms, at)
 		}
 	}
@@ -314,6 +316,7 @@ func closedTables() tables {
 // closedTransform computes the tables of an IMDCT of 2n lines, whose n is the number of splits.
 func closedTransform(scale, split, cosines []float64) {
 	terms := len(split)
+	pairs := terms / 2
 
 	for k := range scale {
 		scale[k] = trig.Sec(2*k+1, 8*terms) / 2
@@ -324,8 +327,8 @@ func closedTransform(scale, split, cosines []float64) {
 	}
 
 	for m := range terms {
-		for k := range terms {
-			cosines[terms*m+k] = trig.Cos(m*(2*k+1), 2*terms)
+		for k := range pairs {
+			cosines[pairs*m+k] = trig.Cos(m*(2*k+1), 2*terms)
 		}
 	}
 }
@@ -382,7 +385,7 @@ func hybridSource(t *testing.T, out *tables) []byte {
 	b.WriteString("var shortWindow = [shortPoints]float64{\n")
 	row(out.shortWindow[:])
 	b.WriteString("}\n\n")
-	transform := func(name, size string, terms int, scale, split, cosines []float64) {
+	transform := func(name, size, pairSize string, terms int, scale, split, cosines []float64) {
 		fmt.Fprintf(&b, "// %sScale holds 1/(2 cos(π(2k+1)/%d)) for each line of the %s block IMDCT, rounded to the\n", name, 8*terms, name)
 		b.WriteString("// nearest float64.\n")
 		fmt.Fprintf(&b, "var %sScale = [2 * %s]float64{\n", name, size)
@@ -393,19 +396,21 @@ func hybridSource(t *testing.T, out *tables) []byte {
 		fmt.Fprintf(&b, "var %sSplit = [%s]float64{\n", name, size)
 		row(split)
 		b.WriteString("}\n\n")
-		fmt.Fprintf(&b, "// %sCosines holds cos(π m(2k+1)/%d) of the %d-point DCTs of the %s block IMDCT at\n", name, 2*terms, terms, name)
-		fmt.Fprintf(&b, "// %d*m+k, rounded to the nearest float64.\n", terms)
-		fmt.Fprintf(&b, "var %sCosines = [%s * %s]float64{\n", name, size, size)
+		pairs := terms / 2
 
-		for at := 0; at < len(cosines); at += terms {
-			row(cosines[at : at+terms])
+		fmt.Fprintf(&b, "// %sCosines holds cos(π m(2k+1)/%d) of the %d-point DCTs of the %s block IMDCT for k\n", name, 2*terms, terms, name)
+		fmt.Fprintf(&b, "// below %d, at %d*m+k, rounded to the nearest float64.\n", pairs, pairs)
+		fmt.Fprintf(&b, "var %sCosines = [%s * %s]float64{\n", name, size, pairSize)
+
+		for at := 0; at < len(cosines); at += pairs {
+			row(cosines[at : at+pairs])
 		}
 
 		b.WriteString("}\n\n")
 	}
 
-	transform("long", "longTerms", longTerms, out.longScale[:], out.longSplit[:], out.longCosines[:])
-	transform("short", "shortTerms", shortTerms, out.shortScale[:], out.shortSplit[:], out.shortCosines[:])
+	transform("long", "longTerms", "longPairs", longTerms, out.longScale[:], out.longSplit[:], out.longCosines[:])
+	transform("short", "shortTerms", "shortPairs", shortTerms, out.shortScale[:], out.shortSplit[:], out.shortCosines[:])
 
 	source, err := format.Source(b.Bytes())
 	require.NoError(t, err)
