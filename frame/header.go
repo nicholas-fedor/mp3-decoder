@@ -81,6 +81,10 @@ const (
 // Only a free-format frame reaches it. The largest frame at a fixed bitrate holds 1729 bytes.
 const MaxSize = 3456
 
+// MaxSamples is the most samples a frame holds for each channel, those of a Layer II frame or an
+// MPEG-1 Layer III frame.
+const MaxSamples = 1152
+
 // Header fields, as shifts of the 32-bit header.
 const (
 	// syncShift is the shift of the 11-bit sync word.
@@ -121,8 +125,6 @@ const (
 const (
 	// layer1Samples is the number of samples in a Layer I frame.
 	layer1Samples = 384
-	// longSamples is the number of samples in a Layer II frame and an MPEG-1 Layer III frame.
-	longSamples = 1152
 	// shortSamples is the number of samples in an MPEG-2 or MPEG-2.5 Layer III frame.
 	shortSamples = 576
 	// layer1Slot is the size of a Layer I slot in bytes.
@@ -242,7 +244,7 @@ func (h Header) Samples() int {
 	case h.Layer == Layer3 && h.Version != MPEG1:
 		return shortSamples
 	default:
-		return longSamples
+		return MaxSamples
 	}
 }
 

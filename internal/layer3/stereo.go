@@ -83,7 +83,7 @@ func Stereo(head frame.Header, left, right *[granuleLines]float64, info *Granule
 	case info.BlockType != ShortBlocks:
 		joint.long(partition, granuleLines)
 	case info.MixedBlock:
-		end := windows * partition.short[mixedShortBand]
+		end := partition.mixedEnd()
 
 		if joint.short(partition, mixedShortBand) {
 			joint.long(partition, end)

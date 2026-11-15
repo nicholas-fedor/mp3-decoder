@@ -17,7 +17,7 @@ import (
 // BenchmarkMainData measures handing out the main data of each frame of a 128 kbit/s joint stereo
 // file that LAME encoded.
 func BenchmarkMainData(b *testing.B) {
-	data, err := os.ReadFile("testdata/mpeg1-joint.mp3")
+	data, err := os.ReadFile("../../testdata/mpeg1-joint.mp3")
 	require.NoError(b, err)
 
 	var (
@@ -54,7 +54,7 @@ func BenchmarkMainData(b *testing.B) {
 // BenchmarkSpectrum measures reading the scalefactors and decoding the spectral values of each
 // channel's granule of a 128 kbit/s joint stereo file that LAME encoded.
 func BenchmarkSpectrum(b *testing.B) {
-	data, err := os.ReadFile("testdata/mpeg1-joint.mp3")
+	data, err := os.ReadFile("../../testdata/mpeg1-joint.mp3")
 	require.NoError(b, err)
 
 	type framed struct {
@@ -117,7 +117,7 @@ func BenchmarkSpectrum(b *testing.B) {
 // BenchmarkRequantize measures requantizing each channel's granule of a 128 kbit/s joint stereo
 // file that LAME encoded.
 func BenchmarkRequantize(b *testing.B) {
-	data, err := os.ReadFile("testdata/mpeg1-joint.mp3")
+	data, err := os.ReadFile("../../testdata/mpeg1-joint.mp3")
 	require.NoError(b, err)
 
 	type granule struct {
@@ -180,7 +180,7 @@ func BenchmarkRequantize(b *testing.B) {
 // BenchmarkStereo measures restoring the left and right lines of each granule of a 128 kbit/s joint
 // stereo file that LAME encoded, most of whose granules use mid/side stereo.
 func BenchmarkStereo(b *testing.B) {
-	data, err := os.ReadFile("testdata/mpeg1-joint.mp3")
+	data, err := os.ReadFile("../../testdata/mpeg1-joint.mp3")
 	require.NoError(b, err)
 
 	type granule struct {

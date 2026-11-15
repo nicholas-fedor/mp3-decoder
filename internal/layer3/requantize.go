@@ -46,7 +46,7 @@ func (s *Spectrum) Requantize(dst *[granuleLines]float64, info *GranuleInfo, fac
 	case info.BlockType != ShortBlocks:
 		at = s.requantizeLong(dst, info, factors, granuleLines)
 	case info.MixedBlock:
-		at = s.requantizeLong(dst, info, factors, windows*s.bands.short[mixedShortBand])
+		at = s.requantizeLong(dst, info, factors, s.bands.mixedEnd())
 		at = s.requantizeShort(dst, info, factors, mixedShortBand, at)
 	default:
 		at = s.requantizeShort(dst, info, factors, 0, 0)

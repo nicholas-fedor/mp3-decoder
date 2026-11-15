@@ -45,6 +45,8 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `hybrid`: 4 long subbands in mixed blocks at 8 kHz | Sieler and Sperschneider, section 4.3.12.1 (sb_amount) |
 | `synth`: matrixing, the V vector and the windowed sum | Sieler and Sperschneider, section 4.3.12.6 and Figure 2. dist10, lsf/decoder/decode.c (SubBandSynthesis) |
 | `synth`: synthesis window taps | Transcribed from FFmpeg, libavcodec/mpegaudiodsp_data.c (ff_mpa_enwindow), LGPL-2.1-or-later, with the symmetry of libavcodec/mpegaudiodsp_template.c (ff_mpa_synth_init). Every tap agrees with dist10, lsf/decoder/tables/dewindow |
+| `layer3`: silent granules where main data is missing, with the filterbanks still running | FFmpeg, libavcodec/mpegaudiodec_template.c (mp_decode_layer3). Symphonia, symphonia-bundle-mp3/src/layer3/mod.rs |
+| `mp3`: the Info frame skipped at the start of a stream | mpg123, src/libmpg123/parse.c (check_lame_tag). FFmpeg, libavformat/mp3dec.c (mp3_parse_vbr_tags) |
 | `trig`: π and cosines | Machin's formula and the Taylor series of the cosine |
 
 No part adapts another decoder's code. The Huffman code tables and the synthesis window taps are data transcribed from FFmpeg.

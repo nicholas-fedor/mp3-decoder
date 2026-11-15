@@ -91,6 +91,14 @@ var bandTables = [...]bands{
 	},
 }
 
+// mixedEnd returns the line where the long blocks of mixed blocks end, where short band 3 starts.
+//
+// Returns:
+//   - int: the line, 36, or 72 at 8 kHz.
+func (b *bands) mixedEnd() int {
+	return windows * b.short[mixedShortBand]
+}
+
 // bandsAt returns the bands of a sampling frequency.
 //
 // Parameters:

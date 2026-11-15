@@ -24,7 +24,7 @@ import (
 // The seed corpus holds the first frame of each encoded fixture.
 func FuzzSideInfo(f *testing.F) {
 	for _, name := range []string{"mpeg1-joint.mp3", "mpeg1-mono.mp3", "mpeg2.mp3", "mpeg25.mp3", "protected.mp3"} {
-		data, err := os.ReadFile("testdata/" + name)
+		data, err := os.ReadFile("../../testdata/" + name)
 		require.NoError(f, err)
 
 		head, ok := frame.Parse(data)

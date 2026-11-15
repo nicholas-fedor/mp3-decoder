@@ -48,6 +48,12 @@ This document explains how the decoder is built and why, part by part. Each sect
   - [Polyphase Synthesis](#polyphase-synthesis)
     - [Flow](#flow)
     - [Window](#window)
+- [Stream Decoding](#stream-decoding)
+  - [Opening a Stream](#opening-a-stream)
+  - [Frame Decoding](#frame-decoding)
+  - [Missing Main Data](#missing-main-data)
+  - [End of a Stream](#end-of-a-stream)
+  - [Accuracy](#accuracy)
 - [Performance](#performance)
 
 ## Principles
@@ -336,6 +342,38 @@ Two further checks bind the window and the matrixing together:
 - The impulse response of subband k is D(n) cos(π/64 (16 + n mod 64)(2k+1)) for the 512 samples the window spans, then silence.
 - Random PCM through the published analysis filterbank, whose window is D/32, and back through synthesis returns 481 samples late. The error stays under 1e-4, the near reconstruction the filterbank pair was designed for.
 
+## Stream Decoding
+
+### Opening a Stream
+
+`mp3.OpenStream` moves past an ID3v2 tag at the start of a stream, then searches for the first frame that the header after it confirms, as [Finding Frames](#finding-frames) describes. That frame's header fixes what the rest of the stream must keep. A Xing or Info tag frame that opens the stream holds no audio, so it is skipped, as mpg123 and FFmpeg skip it.
+
+### Frame Decoding
+
+`layer3.Decoder` decodes a frame through every stage, granule by granule. It keeps what one frame passes to the next: the bit reservoir, the scalefactors that scfsi reuses, and each channel's filterbanks. A mono frame gives each sample to both channels, and samples are not clipped. The decoder refuses MPEG-2 and MPEG-2.5 frames, whose scalefactors it does not read.
+
+The hybrid filterbank takes the block of each granule from Layer III: every subband long, with the normal, start or stop window, for long blocks, none for short blocks, and those below where short band 3 starts for mixed blocks.
+
+### Missing Main Data
+
+A granule whose main data begins before the bytes the reservoir holds gives silence, as FFmpeg and Symphonia handle it. The filterbanks still run on the silent granule, so the granules after it continue from the right state. This happens on joining a stream midway, where the first frames reach back to main data that was never received.
+
+### End of a Stream
+
+A stream ends at the first bytes that do not hold a whole frame of the stream that its first frame started. A trailing tag, a truncated last frame or the frames of another stream all end it there. A frame that fails to decode is reported, and the next read continues with the frame after it.
+
+### Accuracy
+
+The MPEG-1 fixtures decode against the 32-bit float output of mpg123 1.33.7 and FFmpeg n9.0.2, with neither trimming the encoder delay:
+
+| Fixture | RMS difference from mpg123 | Largest difference from mpg123 | RMS difference from FFmpeg | Largest difference from FFmpeg |
+| --- | --- | --- | --- | --- |
+| 128 kbit/s joint stereo | 5.1e-8 | 5.1e-7 | 1.1e-7 | 1.1e-6 |
+| 64 kbit/s mono | 7.7e-8 | 7.1e-7 | 1.4e-7 | 1.1e-6 |
+| 128 kbit/s stereo with CRCs | 4.5e-8 | 3.0e-7 | 1.0e-7 | 1.1e-6 |
+
+Full accuracy allows an RMS difference of 8.8e-6 and a largest difference of 6.1e-5, so each fixture sits about 100 times inside it. The difference from mpg123 is at the rounding of its 32-bit output. FFmpeg's float decoder computes in 32 bits, which doubles its difference.
+
 ## Performance
 
 Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates.
@@ -350,3 +388,4 @@ Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates.
 | Reordering | A granule of short blocks | About 310 ns |
 | Hybrid filterbank, with the direct IMDCT | Random lines | About 5.9 µs a granule of long blocks, and 3.8 µs of short blocks |
 | Polyphase synthesis, with direct matrixing | Random subband samples | About 19 µs a granule of one channel |
+| Opening and decoding a whole stream | A 128 kbit/s LAME joint stereo file | About 245 times faster than real time |

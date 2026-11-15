@@ -65,7 +65,8 @@ var publishedWidths = []struct {
 }
 
 // TestBandTables checks the bands of each sampling frequency against a second transcription that
-// gives each band's width, and checks that long bands cover 576 lines and short bands 192.
+// gives each band's width, and checks that long bands cover 576 lines and short bands 192. The
+// long blocks of mixed blocks must end where the three windows of short bands 0 to 2 do.
 func TestBandTables(t *testing.T) {
 	t.Parallel()
 
@@ -87,6 +88,7 @@ func TestBandTables(t *testing.T) {
 		assert.Equal(t, granuleLines, got.long[longBands], "%d Hz", want.rate)
 		assert.Zero(t, got.short[0])
 		assert.Equal(t, granuleLines/windows, got.short[shortBands], "%d Hz", want.rate)
+		assert.Equal(t, 3*(want.short[0]+want.short[1]+want.short[2]), got.mixedEnd(), "%d Hz mixed end", want.rate)
 	}
 
 	assert.Nil(t, bandsAt(44000))

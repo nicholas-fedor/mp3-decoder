@@ -11,18 +11,45 @@ A pure-Go MPEG audio decoder for MPEG-1, MPEG-2 and MPEG-2.5 audio in Layers I, 
 
 ## Status
 
-The frame header parser is complete. The decoder is in development.
+The decoder plays streams of MPEG-1 Layer III frames, and matches mpg123 to the precision of its 32-bit float output. MPEG-2, MPEG-2.5, Layers I and II, seeking and gapless playback are in development.
+
+## Usage
+
+```go
+decoder, err := mp3.OpenStream(ctx, file)
+if err != nil {
+	return err
+}
+
+buffer := make([][2]float64, 4096)
+
+for {
+	read, err := decoder.Read(buffer)
+	play(buffer[:read])
+
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+}
+```
+
+Samples come as left and right pairs, unclipped, with full scale at 1.
 
 ## Packages
 
 | Package | Contents |
 | --- | --- |
+| mp3, this directory | Opening and decoding a stream |
 | [frame](frame) | Frame headers of every layer and version, the confirmed frame search and the CRC check |
 | [container](container) | ID3v2 headers, end-of-stream tags, and the Xing, Info, LAME and VBRI tags |
 
 ## Testing
 
-Each package has white-box unit tests, a black-box integration test that uses only its exported API, examples and fuzz targets. The internal package [mp3test](internal/mp3test) builds bitstreams for tests. It encodes from its own field definitions, so the parsers are not checked against themselves. Fixtures are encoded by the `generate.sh` script in each package's `testdata` directory.
+Each package has white-box unit tests, a black-box integration test that uses only its exported API, examples and fuzz targets. The internal package [mp3test](internal/mp3test) builds bitstreams for tests. It encodes from its own field definitions, so the parsers are not checked against themselves. The [testdata](testdata) directory holds streams that LAME encoded and the samples mpg123 and ffmpeg decode from them, which its `generate.sh` script writes and the tests of several packages read.
 
 ## Documentation
 

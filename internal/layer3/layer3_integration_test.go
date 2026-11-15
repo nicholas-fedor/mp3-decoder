@@ -211,14 +211,14 @@ func TestParseEncodedFiles(t *testing.T) {
 	}
 }
 
-// encodedFiles names the files LAME encoded into testdata.
+// encodedFiles names the files LAME encoded into the decoder's testdata.
 var encodedFiles = []string{"mpeg1-joint.mp3", "mpeg1-mono.mp3", "mpeg2.mp3", "mpeg25.mp3", "protected.mp3"}
 
-// encodedFrames reads the frames of a file in testdata, which must all be of one stream.
+// encodedFrames reads the frames of a file in the decoder's testdata, which must all be of one stream.
 func encodedFrames(t *testing.T, name string) [][]byte {
 	t.Helper()
 
-	data, err := os.ReadFile("testdata/" + name)
+	data, err := os.ReadFile("../../testdata/" + name)
 	require.NoError(t, err)
 
 	at, first, ok := frame.Find(data, nil)
