@@ -101,18 +101,11 @@ if err != nil {
 
 | Package | What it holds |
 | --- | --- |
-| mp3, this directory | `Open`, `OpenStream` and the `Decoder`, which reads, seeks and counts damage |
-| [frame](frame) | Frame headers of every layer and version (`Parse` and `Header`), the confirmed frame search (`Find`) and the CRC check |
-| [container](container) | The tags at the start of a stream (`TagSize`) and at its end (`TrailerSize`), and the Xing, Info, LAME and VBRI tags (`ParseInfo`) |
+| [mp3](https://pkg.go.dev/github.com/nicholas-fedor/mp3-decoder) | `Open`, `OpenStream` and the `Decoder`, which reads, seeks and counts damage |
+| [frame](https://pkg.go.dev/github.com/nicholas-fedor/mp3-decoder/frame) | Frame headers of every layer and version (`Parse` and `Header`), the confirmed frame search (`Find`) and the CRC check |
+| [container](https://pkg.go.dev/github.com/nicholas-fedor/mp3-decoder/container) | The tags at the start of a stream (`TagSize`) and at its end (`TrailerSize`), and the Xing, Info, LAME and VBRI tags (`ParseInfo`) |
 
-### Using frame and container Alone
-
-The leaf packages read a stream's structure without decoding its audio. A program that needs only a stream's format, length or tags can use them alone:
-
-- **Probing a stream:** `frame.Find` finds the first frame that the header after it confirms, and its `Header` gives the version, layer, sampling frequency, bitrate and channels.
-- **Length and gapless padding:** `container.ParseInfo` reads a tag frame, and `Info.Samples` gives the number of samples the stream encodes, less the encoder delay and padding when the tag gives them.
-- **Seeking by bytes:** `Info.OffsetAt` turns a share of the stream into a byte offset through the tag's seek table, and `Header.Preroll` says how many frames before it a decoder must start to decode exactly.
-- **Finding the audio:** `container.TagSize` and `container.TrailerSize` give the sizes of the tags before and after it.
+`frame` and `container` read a stream's structure without decoding its audio, and neither imports the decoder. A program that needs only a stream's format, length or tags can use them alone. Each package's documentation shows how.
 
 ## Contributing
 

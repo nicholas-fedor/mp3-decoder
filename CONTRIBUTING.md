@@ -74,7 +74,7 @@ CI runs the tests on Linux, macOS and Windows. It also runs the linters, gosec a
 
 ## Packages
 
-The public packages are `mp3` at the root, [frame](frame) and [container](container). The [README](README.md#packages) describes them. The internal packages hold the decoding stages and the test tools.
+The public packages are `mp3` at the root, [frame](frame) and [container](container). The [README](README.md#packages) lists them, and their package documentation describes them. The internal packages hold the decoding stages and the test tools.
 
 | Package | Role |
 | --- | --- |
