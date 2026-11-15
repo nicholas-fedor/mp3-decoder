@@ -3,5 +3,6 @@
 
 // Package mp3 is a pure-Go MPEG audio decoder.
 //
-// It decodes streams of MPEG-1, MPEG-2 and MPEG-2.5 Layer III frames into PCM samples.
+// It decodes streams of Layer I, Layer II and Layer III frames of MPEG-1, MPEG-2 and MPEG-2.5 into
+// PCM samples.
 package mp3

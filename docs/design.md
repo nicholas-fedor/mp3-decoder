@@ -130,7 +130,7 @@ So it accepts these, which a stricter reading would reject:
 
 A free-format header gives no frame size. `Find` measures it from the next two headers, up to 3456 bytes as mpg123 allows. Two headers must follow at one spacing plus each frame's padding. The returned header then carries the bitrate that spacing gives, so its `Size` works like any other. No frame at a fixed bitrate reaches 3456 bytes, so `frame.MaxSize` bounds every frame.
 
-The decoder gives every frame of a free-format stream the bitrate measured at its first frame. mpg123 decodes free format, while FFmpeg n9.0.2 refuses to open the free-format fixture.
+The decoder gives every frame of a free-format stream the bitrate measured at its first frame. mpg123 decodes free format, though in Layer II it takes the wrong allocation table, as [Choosing a Table](#choosing-a-table) shows. FFmpeg n9.0.2 refuses to open either free-format fixture.
 
 ### Tags
 

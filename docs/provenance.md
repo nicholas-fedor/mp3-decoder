@@ -82,4 +82,4 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `frame`, `mp3`: the frames decoded before a Layer I or Layer II seek's target, from the sets of subband samples the synthesis carries | The synthesis filterbank of this decoder |
 | `trig`: π and cosines | Machin's formula and the Taylor series of the cosine |
 
-No part adapts another decoder's code. The Huffman code tables and the synthesis window taps are data transcribed from FFmpeg.
+No part adapts another decoder's code. The Huffman code tables, the synthesis window taps and the Layer II allocation tables are data transcribed from FFmpeg.

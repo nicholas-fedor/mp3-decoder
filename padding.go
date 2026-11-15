@@ -24,8 +24,8 @@ type encoderPadding struct {
 	resume int64
 }
 
-// decoderDelay is the number of samples by which a decoder's filterbanks delay its output, which
-// encoders add to the delay their tag gives.
+// decoderDelay is the number of samples by which a Layer III decoder's filterbanks delay its output,
+// which encoders add to the delay their tag gives.
 const decoderDelay = 529
 
 // paddingOf returns the encoder padding of a stream whose tag frame gives its encoder delay and

@@ -195,15 +195,15 @@ func (d *Decoder) Position() int64 {
 //
 // ID3v2, ID3v1 and APEv2 tags between frames are stepped over. Other bytes that are not a frame of
 // the stream, such as damage or junk, are passed over to the next frame that the header after it
-// confirms. A frame whose main data began before them gives silence. So does a frame that fails
-// to decode, and every frame thus keeps its place. The stream ends where a frame of another stream
-// starts, or where src ends. A last frame that src ends inside is decoded from the bytes it holds,
-// with zeros for the rest, when it holds its side information. A mono stream gives each sample to
-// both channels. The samples are not clipped.
+// confirms. A Layer III frame whose main data began before them gives silence. So does a frame
+// that fails to decode, and every frame thus keeps its place. The stream ends where a frame of
+// another stream starts, or where src ends. A last frame that src ends inside is decoded from the
+// bytes it holds, with zeros for the rest, when it holds everything before its audio data. A mono
+// stream gives each sample to both channels. The samples are not clipped.
 //
-// When the stream's tag gives the encoder delay and padding, the samples the encoder added are left
-// out. At the start these are the encoder delay and the 529 samples by which decoding delays the
-// audio. At the end they are the padding, less those 529 samples, before the last frame the tag
+// When a Layer III stream's tag gives the encoder delay and padding, the samples the encoder added
+// are left out. At the start these are the encoder delay and the 529 samples by which decoding
+// delays the audio. At the end they are the padding, less those 529 samples, before the last frame the tag
 // counts ends. The samples that remain are those the encoder took in.
 //
 // Parameters:
@@ -242,7 +242,8 @@ func (d *Decoder) Read(dst [][2]float64) (int, error) {
 //
 // The samples Read gives from there are those a Read from the start gives, bit for bit. To restore
 // the bit reservoir and the filterbanks, decoding starts some frames before the sample's frame. It
-// starts up to 10 frames before in MPEG-1 and up to 257 at the lowest bitrate of MPEG-2. An index
+// starts 2 frames before in Layer I and 1 in Layer II. In Layer III it starts up to 10 frames
+// before in MPEG-1 and up to 257 at the lowest bitrate of MPEG-2. An index
 // of where the frames lie finds them. Reading the file fills it, and a seek past the frames
 // indexed walks the frames in between. Seeking to the number of samples [Decoder.Len] gives moves
 // to the end.
