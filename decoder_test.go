@@ -160,6 +160,29 @@ func TestOpen(t *testing.T) {
 	assert.False(t, known, "a stream knows its length")
 }
 
+// TestInfo checks the sampling frequency and channels of streams at each version.
+func TestInfo(t *testing.T) {
+	t.Parallel()
+
+	mono := lsfHead
+	mono.Mode = mp3test.Mono
+
+	tests := []struct {
+		name string
+		data []byte
+		want Info
+	}{
+		{"MPEG-1 stereo", frames(stereoHead, 3), Info{SampleRate: 44100, Channels: 2}},
+		{"MPEG-2 mono", frames(mono, 3), Info{SampleRate: 22050, Channels: 1}},
+	}
+
+	for _, tt := range tests {
+		decoder, err := OpenStream(t.Context(), bytes.NewReader(tt.data))
+		require.NoError(t, err, tt.name)
+		assert.Equal(t, tt.want, decoder.Info(), tt.name)
+	}
+}
+
 // TestOpenErrors checks the files that do not open: seeks and reads that fail, files without
 // frames or of another layer, and a canceled search.
 func TestOpenErrors(t *testing.T) {

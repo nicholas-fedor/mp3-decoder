@@ -37,6 +37,15 @@ type Decoder struct {
 	known bool
 }
 
+// Info describes a stream, as its first frame gives it.
+type Info struct {
+	// SampleRate is the sampling frequency in Hz.
+	SampleRate int
+	// Channels is the number of channels, 1 or 2. Read gives each sample of a mono stream to both
+	// channels.
+	Channels int
+}
+
 // Stats counts what decoding a stream has met.
 //
 // Damage never ends a stream. Each count says how often decoding carried on past one kind of it.
@@ -165,6 +174,14 @@ func OpenStream(ctx context.Context, src io.Reader) (*Decoder, error) {
 	decoder.padding = paddingOf(decoder.scanner.tag, decoder.scanner.first)
 
 	return decoder, nil
+}
+
+// Info returns what the stream's first frame says of it.
+//
+// Returns:
+//   - Info: the sampling frequency and the number of channels.
+func (d *Decoder) Info() Info {
+	return Info{SampleRate: d.scanner.first.SampleRate, Channels: d.scanner.first.Channels()}
 }
 
 // Len returns the number of samples the stream decodes to.
