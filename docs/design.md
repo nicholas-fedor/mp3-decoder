@@ -52,6 +52,7 @@ This document explains how the decoder is built and why, part by part. Each sect
     - [Exact Transform Tables](#exact-transform-tables)
   - [Polyphase Synthesis](#polyphase-synthesis)
     - [Flow](#flow)
+    - [Fast Matrixing](#fast-matrixing)
     - [Window](#window)
 - [Stream Decoding](#stream-decoding)
   - [Opening a Stream](#opening-a-stream)
@@ -381,6 +382,21 @@ The filterbank follows the published flow directly:
 
 The 16 vectors live in a ring of 1024 values, so a call writes 64 values instead of shifting all 1024.
 
+#### Fast Matrixing
+
+Matrixing computes V from a 32-point DCT of the subband samples, X(m), the sum over k of S(k) cos(π/64 m(2k+1)). The angles of V fold onto those of X by the cosine's symmetries:
+
+| V(i) | Value |
+| --- | --- |
+| i from 0 to 15 | X(16+i) |
+| i of 16 | 0 |
+| i from 17 to 47 | -X(48-i) |
+| i from 48 to 63 | -X(i-48) |
+
+Byeong Gi Lee's algorithm computes the DCT. It splits n values into the sums x(k) + x(n-1-k) and the differences x(k) - x(n-1-k), each difference scaled by 1/(2 cos(π(2k+1)/(2n))). Two DCTs of n/2 points follow. The even outputs are those of the first. Each odd output adds two neighbouring outputs of the second. Down to 2 points, that takes 80 products instead of the 2048 of the direct sum. The direct sum stays in the tests as the oracle.
+
+The scaling reaches 10.2 at 32 points, so the fast form rounds a little more than the direct sum. The largest error of an impulse response rose from 6.7e-16 to 1.3e-15. That is 25 million times below the 24-bit noise floor, and no conformance stream's RMS or maximum difference changed in its recorded digits.
+
 #### Window
 
 The 512 taps D(i) are exact multiples of 2^-16. FFmpeg lists the first 257 as integers in those units, and tap 512-i is tap i, negated unless i is a multiple of 64. The window is generated from that list, and the test checks every tap against dist10's table of 512 taps to 9 decimals.
@@ -506,7 +522,7 @@ Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates, and 
 | Stereo | A 128 kbit/s LAME joint stereo file | About 230 ns a granule of both channels |
 | Reordering | A granule of short blocks | About 310 ns |
 | Hybrid filterbank, with the direct IMDCT | Random lines | About 5.9 µs a granule of long blocks, and 3.8 µs of short blocks |
-| Polyphase synthesis, with direct matrixing | Random subband samples | About 19 µs a granule of one channel |
-| A frame through every stage | A 128 kbit/s LAME joint stereo file | About 82 µs a frame |
-| Opening and decoding a whole stream | A 128 kbit/s LAME joint stereo file | About 283 times faster than real time |
-| A seek, then reading the frame there | A 128 kbit/s LAME joint stereo file, indexed | About 870 µs, mostly the 9 frames decoded before the sample |
+| Polyphase synthesis, with the fast DCT | Random subband samples | About 7.0 µs a granule of one channel, from 19 µs with direct matrixing |
+| A frame through every stage | A 128 kbit/s LAME joint stereo file | About 54 µs a frame |
+| Opening and decoding a whole stream | A 128 kbit/s LAME joint stereo file | About 420 times faster than real time |
+| A seek, then reading the frame there | A 128 kbit/s LAME joint stereo file, indexed | About 560 µs, mostly the 9 frames decoded before the sample |

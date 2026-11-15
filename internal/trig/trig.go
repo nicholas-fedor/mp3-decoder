@@ -39,32 +39,25 @@ const (
 // Returns:
 //   - float64: the cosine.
 func Cos(numerator, denominator int) float64 {
-	period := turn * denominator
+	result, _ := cosine(numerator, denominator).Float64()
 
-	reduced := numerator % period
-	if reduced < 0 {
-		reduced += period
-	}
+	return result
+}
 
-	if turn*reduced%denominator == 0 && turn*reduced/denominator%turn == 1 {
-		return 0
-	}
+// Sec returns 1/cos(π n/d), the secant, rounded to the nearest float64.
+//
+// It divides 1 by the cosine Cos sums, at 320 bits, so the result is rounded only once.
+//
+// Parameters:
+//   - numerator: the angle's numerator n, in units of π.
+//   - denominator: the angle's denominator d, above 0.
+//
+// Returns:
+//   - float64: the secant, infinite where the cosine is 0.
+func Sec(numerator, denominator int) float64 {
+	one := new(big.Float).SetPrec(precision).SetInt64(1)
 
-	x := new(big.Float).SetPrec(precision).Mul(pi(), big.NewFloat(float64(reduced)))
-	x.Quo(x, big.NewFloat(float64(denominator)))
-
-	square := new(big.Float).SetPrec(precision).Mul(x, x)
-	sum := new(big.Float).SetPrec(precision).SetInt64(1)
-	term := new(big.Float).SetPrec(precision).SetInt64(1)
-
-	for factor := int64(1); term.Sign() != 0 && term.MantExp(nil) > -precision-8; factor += seriesStep {
-		term.Mul(term, square)
-		term.Quo(term, big.NewFloat(float64(factor*(factor+1))))
-		term.Neg(term)
-		sum.Add(sum, term)
-	}
-
-	result, _ := sum.Float64()
+	result, _ := one.Quo(one, cosine(numerator, denominator)).Float64()
 
 	return result
 }
@@ -79,6 +72,46 @@ func Cos(numerator, denominator int) float64 {
 //   - float64: the sine.
 func Sin(numerator, denominator int) float64 {
 	return Cos(denominator-turn*numerator, turn*denominator)
+}
+
+// cosine returns cos(π n/d) to 320 bits, from the Taylor series of the angle reduced to one turn.
+//
+// Parameters:
+//   - numerator: the angle's numerator n, in units of π.
+//   - denominator: the angle's denominator d, above 0.
+//
+// Returns:
+//   - *[big.Float]: the cosine, exactly 0 where it is 0.
+func cosine(numerator, denominator int) *big.Float {
+	period := turn * denominator
+
+	reduced := numerator % period
+	if reduced < 0 {
+		reduced += period
+	}
+
+	sum := new(big.Float).SetPrec(precision)
+
+	if turn*reduced%denominator == 0 && turn*reduced/denominator%turn == 1 {
+		return sum
+	}
+
+	x := new(big.Float).SetPrec(precision).Mul(pi(), big.NewFloat(float64(reduced)))
+	x.Quo(x, big.NewFloat(float64(denominator)))
+
+	square := new(big.Float).SetPrec(precision).Mul(x, x)
+	term := new(big.Float).SetPrec(precision).SetInt64(1)
+
+	sum.SetInt64(1)
+
+	for factor := int64(1); term.Sign() != 0 && term.MantExp(nil) > -precision-8; factor += seriesStep {
+		term.Mul(term, square)
+		term.Quo(term, big.NewFloat(float64(factor*(factor+1))))
+		term.Neg(term)
+		sum.Add(sum, term)
+	}
+
+	return sum
 }
 
 // pi returns π from Machin's formula.

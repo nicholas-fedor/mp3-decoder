@@ -12,8 +12,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// tolerance is the largest difference the oracles may show for subband samples between -1 and 1.
-const tolerance = 1e-12
+// Tolerances of the tests.
+const (
+	// tolerance is the largest difference the oracles may show for subband samples between -1 and
+	// 1.
+	tolerance = 1e-12
+	// impulseTolerance is the largest difference an impulse response may show, twice the largest
+	// measured, 1.33e-15.
+	impulseTolerance = 2.7e-15
+)
 
 // TestSynthesize checks a run of calls with random subband samples against an oracle that follows
 // the published flow literally, shifting all 1024 values of its V vector on each call.
@@ -35,6 +42,37 @@ func TestSynthesize(t *testing.T) {
 
 		bank.Synthesize(&got, &samples)
 		assertPCM(t, &want, &got, call)
+	}
+}
+
+// TestDCT checks the DCT of random values of every length it takes against the direct sum of
+// x(k) cos(π m(2k+1)/(2n)).
+func TestDCT(t *testing.T) {
+	t.Parallel()
+
+	rng := rand.New(rand.NewPCG(49, 50))
+
+	for points := 2; points <= Subbands; points *= 2 {
+		values := make([]float64, points)
+		for k := range values {
+			values[k] = 2*rng.Float64() - 1
+		}
+
+		want := make([]float64, points)
+
+		for m := range want {
+			for k, value := range values {
+				want[m] += value * math.Cos(math.Pi*float64(m*(2*k+1))/float64(2*points))
+			}
+		}
+
+		var scratch [dctScratch]float64
+
+		dct(values, scratch[:])
+
+		for m := range want {
+			assert.InDelta(t, want[m], values[m], 1e-13, "%d points, output %d", points, m)
+		}
 	}
 }
 
@@ -68,7 +106,7 @@ func TestImpulse(t *testing.T) {
 					want = window[n] * math.Cos(angle)
 				}
 
-				require.InDelta(t, want, value, 1e-15, "subband %d sample %d", subband, n)
+				require.InDelta(t, want, value, impulseTolerance, "subband %d sample %d", subband, n)
 			}
 		}
 	}

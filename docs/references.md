@@ -41,6 +41,12 @@ ISO's licence forbids redistributing the conformance bitstreams, so they are nev
 | PDMP3 | <https://github.com/technosaurus/PDMP3> | Public domain |
 | go-mp3 | <https://github.com/hajimehoshi/go-mp3> | Apache-2.0 |
 
+## Implementations of Algorithms
+
+| Name | Source | Licence |
+| --- | --- | --- |
+| Project Nayuki, fast DCT algorithms | <https://www.nayuki.io/page/fast-discrete-cosine-transform-algorithms>, FastDctLee | MIT |
+
 ## Papers
 
 | Name | Document | Role |

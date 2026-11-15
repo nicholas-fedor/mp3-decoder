@@ -23,6 +23,8 @@ func BenchmarkSynthesize(b *testing.B) {
 		samples[at] = randomSamples(rng)
 	}
 
+	b.ReportAllocs()
+
 	for b.Loop() {
 		for at := range samples {
 			bank.Synthesize(&pcm, &samples[at])

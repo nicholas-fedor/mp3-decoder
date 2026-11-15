@@ -39,6 +39,10 @@ func TestExactValues(t *testing.T) {
 		{"sin π", Sin(1, 1), 0},
 		{"sin -π/2", Sin(-1, 2), -1},
 		{"sin 3π/4", Sin(3, 4), root},
+		{"sec 0", Sec(0, 1), 1},
+		{"sec π/3", Sec(1, 3), 2},
+		{"sec 2π/3", Sec(2, 3), -2},
+		{"sec π/4", Sec(1, 4), math.Sqrt2},
 	}
 
 	for _, tt := range tests {
@@ -47,7 +51,7 @@ func TestExactValues(t *testing.T) {
 }
 
 // TestMath checks many angles against package math, at angles reduced to one period so that its
-// own rounding of the angle stays small.
+// own rounding of the angle stays small, and each secant against its cosine.
 func TestMath(t *testing.T) {
 	t.Parallel()
 
@@ -56,8 +60,20 @@ func TestMath(t *testing.T) {
 			angle := math.Pi * float64((n%(2*d)+2*d)%(2*d)) / float64(d)
 			assert.InDelta(t, math.Cos(angle), Cos(n, d), 1e-15, "cos %dπ/%d", n, d)
 			assert.InDelta(t, math.Sin(angle), Sin(n, d), 1e-15, "sin %dπ/%d", n, d)
+
+			// Each rounds to the nearest float64, so their product is 1 within two rounding errors.
+			if Cos(n, d) != 0 {
+				assert.InDelta(t, 1, Sec(n, d)*Cos(n, d), 4.5e-16, "sec %dπ/%d", n, d)
+			}
 		}
 	}
+}
+
+// TestSecZero checks that the secant is infinite where the cosine is 0.
+func TestSecZero(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, math.IsInf(Sec(1, 2), 1))
 }
 
 // TestPi checks π against the float64 constant, which is π rounded to the nearest float64.
