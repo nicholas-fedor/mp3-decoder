@@ -16,15 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nicholas-fedor/mp3-decoder"
-)
-
-// Full accuracy, as ISO/IEC 11172-4 clause 2.6.3 bounds a decoder's difference from a reference
-// for output between -1 and 1.
-var (
-	// fullAccuracyRMS bounds the root mean square difference, 2^-15/√12.
-	fullAccuracyRMS = math.Ldexp(1, -15) / math.Sqrt(12)
-	// fullAccuracyMax bounds the largest difference, 2^-14.
-	fullAccuracyMax = math.Ldexp(1, -14)
+	"github.com/nicholas-fedor/mp3-decoder/internal/conformance"
 )
 
 // TestReferences decodes each MPEG-1 fixture and checks it against the references mpg123 and
@@ -45,24 +37,18 @@ func TestReferences(t *testing.T) {
 			t.Run(name+" "+tool, func(t *testing.T) {
 				t.Parallel()
 
-				want := readReference(t, name+"."+tool+".f32")
-				channels := len(want) / len(got)
-				require.Equal(t, len(want), len(got)*channels, "samples")
+				wave := readReference(t, name+"."+tool+".f32", len(got))
+				ref := conformance.Reference{
+					Name: name, MD5: "", Channels: []int{0, 1}[:len(wave.Channels)], Start: 0, Alternative: false,
+				}
 
-				for ch := range channels {
-					var squares, largest float64
+				differences, err := ref.Measure(got, wave)
+				require.NoError(t, err)
+				require.Len(t, wave.Channels[0], len(got), "samples")
 
-					for at, pair := range got {
-						difference := pair[ch] - want[at*channels+ch]
-						squares += difference * difference
-						largest = max(largest, math.Abs(difference))
-					}
-
-					rms := math.Sqrt(squares / float64(len(got)))
-
-					assert.Less(t, rms, fullAccuracyRMS, "channel %d RMS", ch)
-					assert.LessOrEqual(t, largest, fullAccuracyMax, "channel %d largest", ch)
-					assert.Less(t, rms, ceiling, "channel %d RMS", ch)
+				for ch, difference := range differences {
+					assert.True(t, difference.Full(), "channel %d: %+v", ch, difference)
+					assert.Less(t, difference.RMS, ceiling, "channel %d RMS", ch)
 				}
 			})
 		}
@@ -158,17 +144,23 @@ func readAll(t *testing.T, decoder *mp3.Decoder, size int) [][2]float64 {
 	}
 }
 
-// readReference reads a reference of 32-bit little-endian floats.
-func readReference(t *testing.T, name string) []float64 {
+// readReference reads a reference of interleaved 32-bit little-endian floats, with as many
+// channels as fit a stream of a number of samples.
+func readReference(t *testing.T, name string, samples int) conformance.Waveform {
 	t.Helper()
 
 	data, err := os.ReadFile("testdata/" + name)
 	require.NoError(t, err)
 
-	samples := make([]float64, len(data)/4)
-	for at := range samples {
-		samples[at] = float64(math.Float32frombits(binary.LittleEndian.Uint32(data[4*at:])))
+	values := len(data) / 4
+	channels := max(values/max(samples, 1), 1)
+	wave := conformance.Waveform{Channels: make([][]float64, channels), Rate: 0}
+
+	for at := range values {
+		value := float64(math.Float32frombits(binary.LittleEndian.Uint32(data[4*at:])))
+
+		wave.Channels[at%channels] = append(wave.Channels[at%channels], value)
 	}
 
-	return samples
+	return wave
 }

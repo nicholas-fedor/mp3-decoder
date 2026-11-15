@@ -374,6 +374,8 @@ The MPEG-1 fixtures decode against the 32-bit float output of mpg123 1.33.7 and 
 
 Full accuracy allows an RMS difference of 8.8e-6 and a largest difference of 6.1e-5, so each fixture sits about 100 times inside it. The difference from mpg123 is at the rounding of its 32-bit output. FFmpeg's float decoder computes in 32 bits, which doubles its difference.
 
+The ISO conformance streams are measured against their 24-bit references, as [Conformance](conformance.md) records.
+
 ## Performance
 
 Measured with `go test -bench` on an AMD Ryzen 9 7950X. No stage allocates.

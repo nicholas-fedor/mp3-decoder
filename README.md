@@ -11,29 +11,29 @@ A pure-Go MPEG audio decoder for MPEG-1, MPEG-2 and MPEG-2.5 audio in Layers I, 
 
 ## Status
 
-The decoder plays streams of MPEG-1 Layer III frames, and matches mpg123 to the precision of its 32-bit float output. MPEG-2, MPEG-2.5, Layers I and II, seeking and gapless playback are in development.
+The decoder plays streams of MPEG-1 Layer III frames, and matches mpg123 to the precision of its 32-bit float output. [Conformance](docs/conformance.md) records how each ISO conformance stream decodes. MPEG-2, MPEG-2.5, Layers I and II, seeking and gapless playback are in development.
 
 ## Usage
 
 ```go
 decoder, err := mp3.OpenStream(ctx, file)
 if err != nil {
-	return err
+ return err
 }
 
 buffer := make([][2]float64, 4096)
 
 for {
-	read, err := decoder.Read(buffer)
-	play(buffer[:read])
+ read, err := decoder.Read(buffer)
+ play(buffer[:read])
 
-	if errors.Is(err, io.EOF) {
-		return nil
-	}
+ if errors.Is(err, io.EOF) {
+  return nil
+ }
 
-	if err != nil {
-		return err
-	}
+ if err != nil {
+  return err
+ }
 }
 ```
 
@@ -49,13 +49,14 @@ Samples come as left and right pairs, unclipped, with full scale at 1.
 
 ## Testing
 
-Each package has white-box unit tests, a black-box integration test that uses only its exported API, examples and fuzz targets. The internal package [mp3test](internal/mp3test) builds bitstreams for tests. It encodes from its own field definitions, so the parsers are not checked against themselves. The [testdata](testdata) directory holds streams that LAME encoded and the samples mpg123 and ffmpeg decode from them, which its `generate.sh` script writes and the tests of several packages read.
+Each package has white-box unit tests, a black-box integration test that uses only its exported API, examples and fuzz targets. The internal package [mp3test](internal/mp3test) builds bitstreams for tests. It encodes from its own field definitions, so the parsers are not checked against themselves. The [testdata](testdata) directory holds streams that LAME encoded and the samples mpg123 and ffmpeg decode from them, which its `generate.sh` script writes and the tests of several packages read. The internal package [conformance](internal/conformance) measures the decoder against ISO's conformance streams, which `task test` fetches into a cache first.
 
 ## Documentation
 
 - [References](docs/references.md) lists the standards, descriptions, decoders and papers behind the code.
 - [Provenance](docs/provenance.md) says what each part was written from.
 - [Design](docs/design.md) records the decisions that shape the decoder.
+- [Conformance](docs/conformance.md) records how the decoder measures against ISO's conformance streams.
 
 ## Licence
 
