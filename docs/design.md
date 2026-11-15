@@ -60,6 +60,10 @@ This document explains how the decoder is built and why, part by part. Each sect
   - [Scalefactor Table](#scalefactor-table)
   - [Sample Requantization](#sample-requantization)
   - [Values No Encoder Writes](#values-no-encoder-writes)
+- [Layer II Decoding](#layer-ii-decoding)
+  - [Allocation Tables](#allocation-tables)
+  - [Choosing a Table](#choosing-a-table)
+  - [Quantization Classes](#quantization-classes)
 - [Stream Decoding](#stream-decoding)
   - [Opening a Stream](#opening-a-stream)
   - [Length](#length)
@@ -460,6 +464,31 @@ Two Layer I values are never written. The allocation 15 is forbidden, since it c
 | Scalefactor index 63 | Scales the subband by 0 | Scales the subband by 0, and fails the frame only in a strict build | Continues the table to 2^-20 | Scales the subband by 0 |
 
 The decoder follows mpg123 and libmad, which agree. A frame with the forbidden allocation counts as `Undecodable`, as in Layer III.
+
+## Layer II Decoding
+
+### Allocation Tables
+
+A Layer II frame codes only the lower subbands, and an allocation table says how. For each subband it gives the width of the subband's allocation, which is 2, 3 or 4 bits. It also gives the quantization class that each allocation from 1 selects. MPEG-1 has four tables, of 27, 30, 8 and 12 subbands, and the lower sampling frequencies share a fifth of 30. `allocation.go` holds them as runs of subbands that code alike, with each class named for its steps. FFmpeg, mpg123 and libmad hold the same five tables, entry for entry.
+
+### Choosing a Table
+
+An MPEG-1 frame's table follows its sampling frequency and its bitrate per channel. ISO lists the bitrates that choose each table, and the leading decoders choose alike at every fixed bitrate. They part only at free-format bitrates between those the lists name:
+
+| Bitrate per channel | mpg123 | FFmpeg | libmad | This decoder |
+| --- | --- | --- | --- | --- |
+| Fixed bitrates | As ISO lists | As ISO lists | As ISO lists | As ISO lists |
+| Free format, up to 48 kbit/s | 27 subbands | 8 subbands, or 12 at 32 kHz | 27 at 48 kHz, 30 otherwise | 8 subbands, or 12 at 32 kHz |
+| Free format, above 48 and below 56 kbit/s | 27 subbands | 12 subbands | 27 at 48 kHz, 30 otherwise | 8 subbands, or 12 at 32 kHz |
+| Free format, 56 to 80 kbit/s | 27 subbands | 27 subbands | 27 at 48 kHz, 30 otherwise | 27 subbands |
+| Free format, above 80 and below 96 kbit/s | 27 subbands | 27 at 48 kHz, 12 otherwise | 27 at 48 kHz, 30 otherwise | 27 at 48 kHz, 30 otherwise |
+| Free format, from 96 kbit/s | 27 subbands | 27 at 48 kHz, 30 otherwise | 27 at 48 kHz, 30 otherwise | 27 at 48 kHz, 30 otherwise |
+
+mpg123 chooses by the bitrate index, so a free-format stream always takes its entry for index 0. FFmpeg and libmad choose by the bitrate a free-format stream measures. libmad takes the listed tables only at exactly the bitrates the lists name. Between them FFmpeg falls through to the table of 12 subbands, which ISO gives only to 32 kHz. This decoder reads ISO's lists as ranges, so every bitrate falls in one. Below 56 kbit/s a frame takes the table of 8 subbands, or 12 at 32 kHz, as the lowest bitrates do. Up to 80 kbit/s it takes the table of 27. Above that it takes 27 at 48 kHz and 30 otherwise, as the highest bitrates do.
+
+### Quantization Classes
+
+A class gives the steps of its samples and how they are coded. The classes of 3, 5 and 9 steps code three samples in one code word of 5, 7 or 10 bits. The first sample takes the lowest place. Every other class has 2^n-1 steps and codes each sample in n bits, from 3 bits for 7 steps to 16 bits for 65535.
 
 ## Stream Decoding
 
