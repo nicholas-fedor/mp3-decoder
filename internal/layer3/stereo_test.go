@@ -77,11 +77,12 @@ func TestStereoTables(t *testing.T) {
 	}
 }
 
-// TestStereo checks joint stereo granules of every kind of block at each MPEG-1 sampling frequency
-// against the formulas, line by line, in every mode.
+// TestStereo checks joint stereo granules of every kind of block at every sampling frequency against
+// the formulas, line by line, in every mode.
 //
 // The right channel holds values up to a random band in each window, with silent bands below it,
-// and the positions include those that code none.
+// and the positions include those that code none. The lower sampling frequencies take both
+// intensity ratios.
 func TestStereo(t *testing.T) {
 	t.Parallel()
 
@@ -95,19 +96,25 @@ func TestStereo(t *testing.T) {
 
 	rng := rand.New(rand.NewPCG(13, 14))
 
-	for _, widths := range publishedWidths[:len(mpeg1Rates)] {
+	for at, widths := range publishedWidths {
+		version := frame.MPEG1
+		if at >= len(mpeg1Rates) {
+			version = frame.MPEG2
+		}
+
 		for _, kind := range kinds {
 			for extension := range uint8(4) {
-				for range 20 {
+				for trial := range 20 {
 					head := frame.Header{
-						SampleRate: widths.rate, Version: frame.MPEG1, Layer: frame.Layer3,
+						SampleRate: widths.rate, Version: version, Layer: frame.Layer3,
 						Mode: frame.JointStereo, Extension: extension,
 					}
 					places := linePlaces(&kind, widths.long, widths.short)
 					left, right := randomStereo(rng, &places)
-					factors := randomPositions(rng, kind.BlockType == ShortBlocks && kind.MixedBlock)
+					factors := randomPositions(rng, head, kind.BlockType == ShortBlocks && kind.MixedBlock)
 
-					wantLeft, wantRight := stereoOracle(head, &left, &right, &places, factors)
+					kind.ScalefacCompress = trial % 2
+					wantLeft, wantRight := stereoOracle(head, &left, &right, &places, &kind, factors)
 
 					Stereo(head, &left, &right, &kind, factors)
 
@@ -152,6 +159,74 @@ func TestStereoBands(t *testing.T) {
 	assert.InDelta(t, 0.5, right[134], stereoTolerance, "band 15, position 3")
 	assert.InDelta(t, 1, left[575], 0, "band 21, position 6 of band 20")
 	assert.Zero(t, right[575], "band 21, position 6 of band 20")
+}
+
+// TestStereoLowerTopBands checks the highest long band of a lower-rate granule, which sends no
+// position.
+//
+// It takes the position of band 20 when intensity stereo codes band 20 too, and position 0, which
+// keeps the left channel's value in both channels, when band 20 lies below the bound.
+func TestStereoLowerTopBands(t *testing.T) {
+	t.Parallel()
+
+	head := frame.Header{SampleRate: 22050, Version: frame.MPEG2, Layer: frame.Layer3, Mode: frame.JointStereo, Extension: 1}
+	factors := &Scalefactors{}
+
+	// Band 20 holds position 3, whose odd value scales the left channel by 2^(-2/4).
+	factors.values[20], factors.widest[20] = 3, 7
+
+	tests := []struct {
+		name      string
+		rightLine int
+		wantLeft  float64
+		wantRight float64
+	}{
+		{"band 20 coded too", 400, 0.5 * math.Sqrt2, 1},
+		{"band 20 below the bound", 500, 1, 1},
+	}
+
+	for _, tt := range tests {
+		var left, right [granuleLines]float64
+
+		for line := range left {
+			left[line] = 1
+		}
+
+		right[tt.rightLine] = 0.25
+
+		Stereo(head, &left, &right, &GranuleInfo{}, factors)
+
+		assert.InDelta(t, tt.wantLeft, left[575], stereoTolerance, tt.name)
+		assert.InDelta(t, tt.wantRight, right[575], stereoTolerance, tt.name)
+	}
+}
+
+// TestStereoLowerRatios checks the lower-rate intensity ratios of every position at both intensity
+// scales against powers of 2^(-1/4) and 2^(-1/2), and that the largest value a scalefactor's width
+// holds codes no position.
+func TestStereoLowerRatios(t *testing.T) {
+	t.Parallel()
+
+	for scale := range 2 {
+		joint := jointStereo{left: nil, right: nil, factors: nil, scale: scale, midSide: false, lowerRate: true}
+		ratio := math.Pow(2, -float64(scale+1)/4)
+
+		for position := range 15 {
+			toLeft, toRight := joint.ratios(position)
+
+			wantLeft, wantRight := 1.0, math.Pow(ratio, float64(position/2))
+			if position%2 == 1 {
+				wantLeft, wantRight = math.Pow(ratio, float64((position+1)/2)), 1
+			}
+
+			assert.InDelta(t, wantLeft, toLeft, 1e-15, "scale %d position %d left", scale, position)
+			assert.InDelta(t, wantRight, toRight, 1e-15, "scale %d position %d right", scale, position)
+		}
+
+		assert.Equal(t, uncoded, joint.position(7, 7), "scale %d", scale)
+		assert.Equal(t, uncoded, joint.position(0, 0), "scale %d", scale)
+		assert.Equal(t, 6, joint.position(6, 7), "scale %d", scale)
+	}
 }
 
 // TestStereoModes checks that frames that are not joint stereo, and joint stereo frames with
@@ -270,13 +345,31 @@ func randomStereo(rng *rand.Rand, places *[granuleLines]lineBand) ([granuleLines
 	return left, right
 }
 
-// randomPositions returns random scalefactors that hold intensity positions from 0 to 8, so that
-// positions 7 and 8 code none.
-func randomPositions(rng *rand.Rand, mixed bool) *Scalefactors {
-	factors := &Scalefactors{shift: map[bool]int{true: mpeg1MixedShift}[mixed]}
+// randomPositions returns random scalefactors that hold intensity positions, including those that
+// code none.
+//
+// MPEG-1 positions run from 0 to 8, so that 7 and 8 code none. At the lower sampling frequencies
+// each scalefactor takes a random width from 0 to 4 bits and a value up to the largest the width
+// holds, which codes none.
+func randomPositions(rng *rand.Rand, head frame.Header, mixed bool) *Scalefactors {
+	factors := &Scalefactors{}
+
+	if mixed {
+		factors.shift = mpeg1MixedShift
+		if head.Version != frame.MPEG1 {
+			factors.shift = lsfMixedShift
+		}
+	}
 
 	for at := range shortSent {
-		factors.values[at] = uint8(rng.IntN(noPosition + 2))
+		if head.Version == frame.MPEG1 {
+			factors.values[at] = uint8(rng.IntN(noPosition + 2))
+
+			continue
+		}
+
+		factors.widest[at] = uint8(1<<rng.IntN(5) - 1)
+		factors.values[at] = uint8(rng.IntN(int(factors.widest[at]) + 1))
 	}
 
 	return factors
@@ -287,7 +380,8 @@ func randomPositions(rng *rand.Rand, mixed bool) *Scalefactors {
 // It finds the intensity bound of the long bands and of each window first, from the highest band
 // in which the right channel holds a value, then restores each line on its own.
 func stereoOracle(
-	head frame.Header, left, right *[granuleLines]float64, places *[granuleLines]lineBand, factors *Scalefactors,
+	head frame.Header, left, right *[granuleLines]float64, places *[granuleLines]lineBand, info *GranuleInfo,
+	factors *Scalefactors,
 ) ([granuleLines]float64, [granuleLines]float64) {
 	tops := [4]int{-1, -1, -1, -1}
 
@@ -307,15 +401,26 @@ func stereoOracle(
 
 	for line, place := range places {
 		coded := place.band > tops[0] && shortsSilent
-		position := factors.Long(min(place.band, 20))
+		position, legal := oraclePosition(head, factors, place, place.band-1 > tops[0])
 
 		if place.short {
 			coded = place.band > tops[place.window+1]
-			position = factors.Short(min(place.band, 11), place.window)
+			position, legal = oraclePosition(head, factors, place, place.band-1 > tops[place.window+1])
 		}
 
-		switch value := left[line]; {
-		case head.Extension&1 != 0 && coded && position < 7:
+		value := left[line]
+
+		switch {
+		case head.Extension&1 != 0 && coded && legal && head.Version != frame.MPEG1:
+			ratio := math.Pow(2, -float64(info.ScalefacCompress&1+1)/4)
+			outLeft[line], outRight[line] = value, value
+
+			if position%2 == 1 {
+				outLeft[line] = value * math.Pow(ratio, float64((position+1)/2))
+			} else {
+				outRight[line] = value * math.Pow(ratio, float64(position/2))
+			}
+		case head.Extension&1 != 0 && coded && legal:
 			k := math.Tan(float64(position) * math.Pi / 12)
 			outLeft[line], outRight[line] = value*k/(1+k), value/(1+k)
 
@@ -330,6 +435,37 @@ func stereoOracle(
 	}
 
 	return outLeft, outRight
+}
+
+// oraclePosition returns the intensity position of a line's band, and whether it codes one.
+//
+// The highest long band 21 and short band 12 send no position. In MPEG-1 they take the position
+// of the band below. At the lower sampling frequencies they take it only when intensity stereo
+// codes the band below, and position 0 otherwise.
+func oraclePosition(head frame.Header, factors *Scalefactors, place lineBand, belowCoded bool) (int, bool) {
+	lower := head.Version != frame.MPEG1
+	band, top := place.band, 21
+
+	if place.short {
+		top = 12
+	}
+
+	if band == top && lower && !belowCoded {
+		return 0, true
+	}
+
+	band = min(band, top-1)
+
+	value, widest := factors.Long(band), factors.widestLong(band)
+	if place.short {
+		value, widest = factors.Short(band, place.window), factors.widestShort(band, place.window)
+	}
+
+	if lower {
+		return value, value < widest
+	}
+
+	return value, value < noPosition
 }
 
 // assertLines checks lines against the lines an oracle gives.

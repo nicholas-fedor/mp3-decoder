@@ -52,7 +52,7 @@ Most references match the decoded output from its first sample, channel for chan
 The conformance test records these results and the census below. Run it with `-update` and `MP3_DECODER_CONFORMANCE` set to rewrite them, and without `-update` it fails when any result changes.
 
 <!-- results start -->
-29 of 40 streams decode at full accuracy.
+40 of 40 streams decode at full accuracy.
 
 | Stream | Reference | Channel | RMS | Largest | Result |
 | --- | --- | --- | --- | --- | --- |
@@ -91,11 +91,16 @@ The conformance test records these results and the census below. Run it with `-u
 | l3_20141 | l3_20141 | left | 3.4e-08 | 6.0e-08 | full accuracy |
 | l3_20142 | l3_20142 | left | 3.4e-08 | 6.0e-08 | full accuracy |
 | l3_20143 | l3_20143 | left | 3.4e-08 | 6.0e-08 | full accuracy |
-| l3_20244 | l3_20244 | | | | not decoded, 1 frame failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
-| l3_20245 | l3_20245 | | | | not decoded, 768 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
-| l3_20246 | l3_20246 | | | | not decoded, 212 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
-| l3_20247 | l3_20247 | | | | not decoded, 386 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
-| l3_20248 | l3_20248 | | | | not decoded, 385 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
+| l3_20244 | l3_20244 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l3_20244 | l3_20244 | right | 3.4e-08 | 6.0e-08 | full accuracy |
+| l3_20245 | l3_20245 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l3_20245 | l3_20245 | right | 3.4e-08 | 6.1e-08 | full accuracy |
+| l3_20246 | l3_20246 | left | 3.2e-08 | 6.0e-08 | full accuracy |
+| l3_20246 | l3_20246 | right | 3.4e-08 | 6.1e-08 | full accuracy |
+| l3_20247 | l3_20247 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l3_20247 | l3_20247 | right | 2.1e-08 | 6.0e-08 | full accuracy |
+| l3_20248 | l3_20248 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l3_20248 | l3_20248 | right | 3.4e-08 | 6.0e-08 | full accuracy |
 | l3_25101 | l3_25101 | left | 5.5e-08 | 2.7e-07 | full accuracy |
 | l3_25102 | l3_25102 | left | 6.1e-08 | 2.7e-07 | full accuracy |
 | l3_25103 | l3_25103 | left | 7.1e-08 | 4.0e-07 | full accuracy |
@@ -106,12 +111,18 @@ The conformance test records these results and the census below. Run it with `-u
 | l3_25202 | l3_25202 | right | 0.0e+00 | 0.0e+00 | full accuracy |
 | l3_25203 | l3_25203 | left | 5.6e-08 | 2.4e-07 | full accuracy |
 | l3_25203 | l3_25203 | right | 5.4e-08 | 1.2e-07 | full accuracy |
-| l3_25204 | l3_25204 | | | | not decoded, 102 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
-| l3_25205 | l3_25205 | | | | not decoded, 138 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
-| l3_25206 | l3_25206 | | | | not decoded, 144 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
-| l3_25207 | l3_25207 | | | | not decoded, 94 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
-| l3_25208 | l3_25208 | | | | not decoded, 130 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
-| l3_25209 | l3_25209 | | | | not decoded, 141 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
+| l3_25204 | l3_25204 | left | 6.6e-08 | 4.2e-07 | full accuracy |
+| l3_25204 | l3_25204 | right | 5.6e-08 | 2.2e-07 | full accuracy |
+| l3_25205 | l3_25205 | left | 6.4e-08 | 4.3e-07 | full accuracy |
+| l3_25205 | l3_25205 | right | 6.4e-08 | 4.3e-07 | full accuracy |
+| l3_25206 | l3_25206 | left | 6.5e-08 | 3.4e-07 | full accuracy |
+| l3_25206 | l3_25206 | right | 6.5e-08 | 3.4e-07 | full accuracy |
+| l3_25207 | l3_25207 | left | 1.2e-07 | 1.2e-06 | full accuracy |
+| l3_25207 | l3_25207 | right | 1.1e-07 | 1.0e-06 | full accuracy |
+| l3_25208 | l3_25208 | left | 1.3e-07 | 1.2e-06 | full accuracy |
+| l3_25208 | l3_25208 | right | 1.3e-07 | 1.3e-06 | full accuracy |
+| l3_25209 | l3_25209 | left | 1.2e-07 | 1.1e-06 | full accuracy |
+| l3_25209 | l3_25209 | right | 1.2e-07 | 1.2e-06 | full accuracy |
 <!-- results end -->
 
 ## Census

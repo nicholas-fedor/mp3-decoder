@@ -4,8 +4,6 @@
 package layer3
 
 import (
-	"errors"
-
 	"github.com/nicholas-fedor/mp3-decoder/frame"
 	"github.com/nicholas-fedor/mp3-decoder/internal/bits"
 	"github.com/nicholas-fedor/mp3-decoder/internal/hybrid"
@@ -42,10 +40,6 @@ type Decoder struct {
 // granulePCM is the number of PCM samples a granule gives for each channel.
 const granulePCM = hybrid.Samples * synth.Subbands
 
-// ErrIntensity is returned for an MPEG-2 or MPEG-2.5 frame that uses intensity stereo, which the
-// decoder does not restore at the lower sampling frequencies.
-var ErrIntensity = errors.New("layer3: intensity stereo below 32 kHz is not decoded")
-
 // Decode decodes the audio of one frame.
 //
 // The frame's main data may begin in the main data of the frames before it. A frame whose main
@@ -62,12 +56,8 @@ var ErrIntensity = errors.New("layer3: intensity stereo below 32 kHz is not deco
 //   - data: the frame's bytes from its header to its end.
 //
 // Returns:
-//   - error: [ErrIntensity], [ErrShortFrame] or [ErrBlockType], and then dst is left as it was.
+//   - error: [ErrShortFrame] or [ErrBlockType], and then dst is left as it was.
 func (d *Decoder) Decode(dst [][2]float64, head frame.Header, data []byte) error {
-	if head.Version != frame.MPEG1 && usesIntensity(head) {
-		return ErrIntensity
-	}
-
 	err := d.side.Parse(head, data)
 	if err != nil {
 		return err

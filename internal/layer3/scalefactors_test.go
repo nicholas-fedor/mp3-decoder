@@ -151,3 +151,38 @@ func TestReadLSF(t *testing.T) {
 		assert.Equal(t, tt.preflag, factors.preflag, tt.name)
 	}
 }
+
+// TestWidest checks the largest value each scalefactor's width holds, at the lower sampling
+// frequencies and in MPEG-1, with 0 for the bands no partition sends.
+func TestWidest(t *testing.T) {
+	t.Parallel()
+
+	data := make([]byte, 64)
+	lsf := frame.Header{SampleRate: 22050, Version: frame.MPEG2, Layer: frame.Layer3, Mode: frame.Stereo}
+
+	var (
+		stream  bits.Reader
+		side    SideInfo
+		factors Scalefactors
+	)
+
+	// 399 gives widths 4, 4, 3 and 3 over long bands 0 to 5, 6 to 10, 11 to 15 and 16 to 20.
+	side.Granules[0][0] = GranuleInfo{ScalefacCompress: 399}
+	stream.Reset(data, 0)
+	factors.Read(&stream, lsf, &side, 0, 0)
+
+	assert.Equal(t, 15, factors.widestLong(5))
+	assert.Equal(t, 15, factors.widestLong(6))
+	assert.Equal(t, 7, factors.widestLong(11))
+	assert.Equal(t, 7, factors.widestLong(20))
+	assert.Zero(t, factors.widestLong(21))
+
+	// MPEG-1 scalefac_compress 14 gives slen1 4 for short bands 0 to 5 and slen2 2 for 6 to 11.
+	side.Granules[0][0] = GranuleInfo{ScalefacCompress: 14, BlockType: ShortBlocks}
+	stream.Reset(data, 0)
+	factors.Read(&stream, mpeg1Head, &side, 0, 0)
+
+	assert.Equal(t, 15, factors.widestShort(5, 2))
+	assert.Equal(t, 3, factors.widestShort(6, 0))
+	assert.Zero(t, factors.widestShort(12, 1))
+}

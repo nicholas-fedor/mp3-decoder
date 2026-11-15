@@ -47,6 +47,9 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `synth`: synthesis window taps | Transcribed from FFmpeg, libavcodec/mpegaudiodsp_data.c (ff_mpa_enwindow), LGPL-2.1-or-later, with the symmetry of libavcodec/mpegaudiodsp_template.c (ff_mpa_synth_init). Every tap agrees with dist10, lsf/decoder/tables/dewindow |
 | `layer3`: silent frames where main data is missing, with the filterbanks still running | mpg123, src/libmpg123/layer3.c (III_get_side_info) |
 | `layer3`: lower-rate scalefactors, their partitions and preflag | FFmpeg, libavcodec/mpegaudiodec_template.c (lsf_sf_expand) and libavcodec/mpegaudiodec_common.c (ff_lsf_nsf_table). mpg123, src/libmpg123/layer3.c (III_get_scale_factors_2) |
+| `layer3`: lower-rate intensity ratios and the intensity scale | FFmpeg, libavcodec/mpegaudiodec_template.c (is_table_lsf). mpg123, src/libmpg123/layer3.c (III_i_stereo) |
+| `layer3`: the largest value a lower-rate scalefactor's width holds coding no intensity position | The ISO/IEC 14496-26 references of the MPEG-2 and MPEG-2.5 streams with intensity stereo |
+| `layer3`: the highest lower-rate bands taking position 0 when the band below lies under the bound | The ISO/IEC 14496-26 reference of `l3_20245` |
 | `mp3`: a last frame that the stream ends inside, decoded from the bytes it holds | FFmpeg, libavcodec/mpegaudiodec_template.c (decode_frame) |
 | `layer3`, `hybrid`: the normal window for the lowest subbands of a start or stop block with the mixed flag | FFmpeg, libavcodec/mpegaudiodsp_template.c (ff_imdct36_blocks). mpg123, src/libmpg123/layer3.c (III_hybrid) |
 | `layer3`: filterbanks started afresh when the number of channels changes | The ISO/IEC 14496-26 references of `l3_10201` |

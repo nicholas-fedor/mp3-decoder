@@ -19,8 +19,13 @@ type jointStereo struct {
 	right *[granuleLines]float64
 	// factors holds the right channel's scalefactors, which give the intensity positions.
 	factors *Scalefactors
+	// scale is the lower-rate intensity scale, 0 for a ratio of 2^(-1/4) and 1 for 2^(-1/2).
+	scale int
 	// midSide reports whether the frame codes bands with mid/side stereo.
 	midSide bool
+	// lowerRate reports whether the frame is MPEG-2 or MPEG-2.5, whose positions take the
+	// lower-rate ratios.
+	lowerRate bool
 }
 
 // Joint stereo modes, as bits of a Layer III frame's mode extension.
@@ -33,8 +38,10 @@ const (
 
 // Joint stereo constants.
 const (
-	// noPosition is the lowest intensity position that codes no position.
+	// noPosition is the lowest MPEG-1 intensity position that codes no position.
 	noPosition = 7
+	// uncoded stands for a band that intensity stereo does not code.
+	uncoded = -1
 	// lastLongPosition is the highest long band that sends an intensity position.
 	lastLongPosition = longBands - 2
 	// lastShortPosition is the highest short band that sends an intensity position.
@@ -43,7 +50,7 @@ const (
 	invSqrt2 = math.Sqrt2 / 2
 )
 
-// Stereo turns the lines of an MPEG-1 joint stereo granule into its left and right channels.
+// Stereo turns the lines of a joint stereo granule into its left and right channels.
 //
 // It changes nothing in a frame that is not joint stereo. Mid/side stereo turns mid and side lines
 // M and S into left (M+S)/√2 and right (M-S)/√2.
@@ -51,9 +58,18 @@ const (
 // Intensity stereo codes the bands above the highest band in which the right channel holds a
 // value. Short blocks find that band in each window. Mixed blocks code their long bands only when
 // no window holds a value in a short band. A band above that bound holds the left channel's value v
-// and takes its intensity position p from the right channel's scalefactors. It becomes left
-// v k/(1+k) and right v/(1+k), where k = tan(p π/12). The highest long band and the highest short
-// band take the position of the band below them, and a position of 7 or more codes none.
+// and takes its intensity position p from the right channel's scalefactors.
+//
+// In MPEG-1 a band becomes left v k/(1+k) and right v/(1+k), where k = tan(p π/12), and a position
+// of 7 or more codes none. The highest long band and the highest short band take the position of
+// the band below them.
+//
+// At the lower sampling frequencies the right channel's scalefac_compress gives an intensity ratio
+// r of 2^(-1/4), or 2^(-1/2) when it is odd. An odd position scales the left channel by
+// r^((p+1)/2), an even one scales the right channel by r^(p/2), and the largest value a
+// scalefactor's width holds codes none. The highest long band and the highest short band take the
+// position of the band below them when intensity stereo codes that band too, and position 0
+// otherwise.
 //
 // The bands below the bound, and the bands that code no position, take mid/side stereo when the
 // frame has it too.
@@ -69,10 +85,13 @@ func Stereo(head frame.Header, left, right *[granuleLines]float64, info *Granule
 		return
 	}
 
-	joint := jointStereo{left: left, right: right, factors: factors, midSide: head.Extension&midSideStereo != 0}
+	joint := jointStereo{
+		left: left, right: right, factors: factors, scale: info.ScalefacCompress & 1,
+		midSide: head.Extension&midSideStereo != 0, lowerRate: head.Version != frame.MPEG1,
+	}
 
 	if !usesIntensity(head) {
-		joint.band(0, granuleLines, noPosition)
+		joint.band(0, granuleLines, uncoded)
 
 		return
 	}
@@ -88,7 +107,7 @@ func Stereo(head frame.Header, left, right *[granuleLines]float64, info *Granule
 		if joint.short(partition, mixedShortBand) {
 			joint.long(partition, end)
 		} else {
-			joint.band(0, end, noPosition)
+			joint.band(0, end, uncoded)
 		}
 	default:
 		joint.short(partition, 0)
@@ -100,7 +119,7 @@ func Stereo(head frame.Header, left, right *[granuleLines]float64, info *Granule
 // Parameters:
 //   - from: the first line.
 //   - to: the line after the last.
-//   - position: the intensity position, or 7 or more where intensity stereo does not code the run.
+//   - position: the intensity position, or -1 where intensity stereo does not code the run.
 func (j *jointStereo) band(from, to, position int) {
 	left := j.left[from:to]
 	right := j.right[from:to]
@@ -108,8 +127,8 @@ func (j *jointStereo) band(from, to, position int) {
 	right = right[:len(left)]
 
 	switch {
-	case position < noPosition:
-		toLeft, toRight := intensityRatios[position], intensityRatios[noPosition-1-position]
+	case position != uncoded:
+		toLeft, toRight := j.ratios(position)
 
 		for line, value := range left {
 			left[line] = float64(value * toLeft)
@@ -144,13 +163,73 @@ func (j *jointStereo) long(partition *bands, end int) {
 
 		coded = coded && silent(j.right[from:to])
 
-		position := noPosition
+		position := uncoded
 		if coded {
-			position = j.factors.Long(min(band, lastLongPosition))
+			position = j.longPosition(partition, band)
 		}
 
 		j.band(from, to, position)
 	}
+}
+
+// longPosition returns the intensity position of a long band that intensity stereo codes.
+//
+// Parameters:
+//   - partition: the bands of the frame's sampling frequency.
+//   - band: the long band.
+//
+// Returns:
+//   - int: the position, or -1 where the band codes none.
+func (j *jointStereo) longPosition(partition *bands, band int) int {
+	if band <= lastLongPosition {
+		return j.position(j.factors.Long(band), j.factors.widestLong(band))
+	}
+
+	if j.lowerRate && !silent(j.right[partition.long[band-1]:partition.long[band]]) {
+		return 0
+	}
+
+	return j.longPosition(partition, band-1)
+}
+
+// position returns the intensity position a scalefactor gives.
+//
+// Parameters:
+//   - value: the scalefactor.
+//   - widest: the largest value its width holds.
+//
+// Returns:
+//   - int: the position, or -1 where it codes none, which a value of 7 or more does in MPEG-1 and
+//     the largest value its width holds does at the lower sampling frequencies.
+func (j *jointStereo) position(value, widest int) int {
+	if j.lowerRate && value >= widest || !j.lowerRate && value >= noPosition {
+		return uncoded
+	}
+
+	return value
+}
+
+// ratios returns how an intensity position scales the left channel's value into each channel.
+//
+// Parameters:
+//   - position: the position.
+//
+// Returns:
+//   - toLeft: the scale of the left channel.
+//   - toRight: the scale of the right channel.
+//
+//nolint:nonamedreturns // Same-type returns need names.
+func (j *jointStereo) ratios(position int) (toLeft, toRight float64) {
+	if !j.lowerRate {
+		return intensityRatios[position], intensityRatios[noPosition-1-position]
+	}
+
+	steps := (j.scale + 1) * ((position + 1) >> 1)
+	if position&1 == 1 {
+		return gain(-steps), 1
+	}
+
+	return 1, gain(-steps)
 }
 
 // short restores each window of the short bands from a band up, from the highest band down.
@@ -176,9 +255,9 @@ func (j *jointStereo) short(partition *bands, from int) bool {
 
 			coded = coded && silent(j.right[start:start+width])
 
-			position := noPosition
+			position := uncoded
 			if coded {
-				position = j.factors.Short(min(band, lastShortPosition), window)
+				position = j.shortPosition(partition, band, window)
 			}
 
 			j.band(start, start+width, position)
@@ -188,6 +267,31 @@ func (j *jointStereo) short(partition *bands, from int) bool {
 	}
 
 	return all
+}
+
+// shortPosition returns the intensity position of a short band that intensity stereo codes in
+// one window.
+//
+// Parameters:
+//   - partition: the bands of the frame's sampling frequency.
+//   - band: the short band.
+//   - window: the window.
+//
+// Returns:
+//   - int: the position, or -1 where the band codes none.
+func (j *jointStereo) shortPosition(partition *bands, band, window int) int {
+	if band <= lastShortPosition {
+		return j.position(j.factors.Short(band, window), j.factors.widestShort(band, window))
+	}
+
+	width := partition.short[band] - partition.short[band-1]
+	start := windows*partition.short[band-1] + window*width
+
+	if j.lowerRate && !silent(j.right[start:start+width]) {
+		return 0
+	}
+
+	return j.shortPosition(partition, band-1, window)
 }
 
 // silent reports whether every line of a run is 0.

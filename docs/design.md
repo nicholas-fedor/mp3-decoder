@@ -41,6 +41,7 @@ This document explains how the decoder is built and why, part by part. Each sect
     - [Mid/Side](#midside)
     - [Intensity Bound](#intensity-bound)
     - [Intensity Positions](#intensity-positions)
+    - [Lower Sampling Frequencies](#lower-sampling-frequencies-1)
   - [Reordering](#reordering)
   - [Hybrid Filterbank](#hybrid-filterbank)
     - [Stages](#stages)
@@ -259,7 +260,7 @@ Building the power of two from its bits takes about 125 ns a granule against 155
 
 ### Stereo
 
-`layer3.Stereo` restores the left and right channels of an MPEG-1 joint stereo granule from the requantized lines, before reordering, as FFmpeg, Symphonia and dist10 order the stages. A stream should give both channels the same block type. Like FFmpeg and mpg123, the stage reads the block type and intensity positions of the right channel.
+`layer3.Stereo` restores the left and right channels of a joint stereo granule from the requantized lines, before reordering, as FFmpeg, Symphonia and dist10 order the stages. A stream should give both channels the same block type. Like FFmpeg and mpg123, the stage reads the block type and intensity positions of the right channel.
 
 #### Mid/Side
 
@@ -288,6 +289,22 @@ A band above the bound holds the left channel's value v and takes its position p
 | Long band 21 and short band 12, which send no scalefactor | Take the position of the band below | Take the position of the band below | Take the position of the band below |
 
 A band that codes no position takes mid/side stereo when the frame has it, and keeps its channels otherwise.
+
+#### Lower Sampling Frequencies
+
+MPEG-2 and MPEG-2.5 frames take other ratios. The lowest bit of the right channel's scalefac_compress, the intensity scale, gives a ratio r of 2^(-1/4), or 2^(-1/2) when it is set. Position 0 keeps the left channel's value v in both channels, an odd position p scales the left channel to v r^((p+1)/2), and an even one scales the right channel to v r^(p/2). The ratios come from the exact powers of 2^(1/4) that requantization uses.
+
+Which position codes none differs between decoders, and the conformance streams settle it:
+
+| Rule | Decoder | `l3_20247` left RMS | Streams with intensity stereo at full accuracy |
+| --- | --- | --- | --- |
+| Position 7 codes none | mpg123 | 3.8e-2 | 2 of 11 |
+| No position codes none | FFmpeg | 3.8e-2 | 2 of 11 |
+| The largest value a scalefactor's width holds, 2^slen - 1, codes none | This decoder | 3.4e-8 | 7 of 11, and all 11 with the rule for the highest bands below |
+
+So `Scalefactors` keeps the largest value each scalefactor's width holds.
+
+Long band 21 and short band 12 send no position. The streams show that they take the position of the band below only when intensity stereo codes that band too, and position 0 otherwise. In `l3_20245` only band 21 lies above the bound in some frames, and taking band 20's position there scales the left channel by 2^(-3/4) where the reference keeps it. With that rule, every stream with intensity stereo decodes at full accuracy. MPEG-1 keeps the position of the band below in either case, as FFmpeg and mpg123 do, and no MPEG-1 conformance stream has only its highest band above the bound.
 
 ### Reordering
 

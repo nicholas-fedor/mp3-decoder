@@ -139,7 +139,6 @@ func TestDecodeChannelChange(t *testing.T) {
 func TestDecodeErrors(t *testing.T) {
 	t.Parallel()
 
-	intensity := mp3test.Header{Version: mp3test.MPEG2, Layer: mp3test.Layer3, Bitrate: 8, Mode: mp3test.JointStereo, Extension: 1}
 	mpeg1 := mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer3, Bitrate: 9}
 	broken := mp3test.SideInfo{Granules: [2][2]mp3test.Granule{{{WindowSwitching: true}}}}
 
@@ -149,7 +148,6 @@ func TestDecodeErrors(t *testing.T) {
 		head mp3test.Header
 		side mp3test.SideInfo
 	}{
-		{layer3.ErrIntensity, "MPEG-2 intensity stereo", intensity, mp3test.SideInfo{}},
 		{layer3.ErrBlockType, "window switching with block type 0", mpeg1, broken},
 	}
 

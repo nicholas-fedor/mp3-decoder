@@ -176,8 +176,9 @@ func TestReadEnds(t *testing.T) {
 		decoder, err := OpenStream(t.Context(), bytes.NewReader(frames(intensity, 3)))
 		require.NoError(t, err)
 
-		_, err = readSamples(decoder)
-		require.ErrorIs(t, err, layer3.ErrIntensity)
+		got, err := readSamples(decoder)
+		require.ErrorIs(t, err, io.EOF)
+		assert.Len(t, got, 3*frame.MaxSamples/2)
 	})
 
 	for name, size := range map[string]int{"a source failing within a frame": 1000, "a source failing between frames": 834} {

@@ -234,19 +234,23 @@ func FuzzSpectrum(f *testing.F) {
 	})
 }
 
-// FuzzStereo restores joint stereo lines drawn from any bytes under any MPEG-1 block, mode and
-// intensity positions, and checks every line against the formulas.
+// FuzzStereo restores joint stereo lines drawn from any bytes under any block, sampling frequency,
+// mode, intensity scale and intensity positions, and checks every line against the formulas.
 //
 // It then reorders both channels and checks that each holds the same lines as before.
 //
 // Each pair of bytes gives a line's left and right values between -1 and 1, and lines past the
-// bytes are 0. Positions run from 0 to 15, so most code none. The seed corpus holds a long block
-// with values in both channels, a short block with a silent right channel, and mixed blocks with
-// the right channel silent above line 40.
+// bytes are 0. MPEG-1 positions run from 0 to 15, so most code none. At the lower sampling
+// frequencies each position byte gives a width from 0 to 4 bits and a value up to the largest it
+// holds. The seed corpus holds a long block with values in both channels, a short block with a
+// silent right channel, mixed blocks with the right channel silent above line 40, and the same at
+// the lower frequencies.
 func FuzzStereo(f *testing.F) {
 	f.Add(slices.Repeat([]byte{0x40, 0x20}, granuleLines), []byte{0, 0, 3, 3, 1, 4, 1, 5, 9, 2, 6})
 	f.Add(slices.Repeat([]byte{0x7f, 0x00}, granuleLines), []byte{1, 3, 1, 0, 1, 2, 3, 4, 5, 6})
 	f.Add(slices.Repeat([]byte{0x81, 0x33}, 20), []byte{2, 4, 3, 6, 6, 6, 0, 0, 0, 7, 8})
+	f.Add(slices.Repeat([]byte{0x40, 0x20}, granuleLines), []byte{4, 0, 7, 14, 9, 19, 24, 4})
+	f.Add(slices.Repeat([]byte{0x81, 0x33}, 20), []byte{8, 4, 1, 3, 8, 13, 18, 23})
 
 	kinds := []GranuleInfo{
 		{},
@@ -261,19 +265,36 @@ func FuzzStereo(f *testing.F) {
 			return
 		}
 
-		widths := publishedWidths[int(fields[0])%len(mpeg1Rates)]
+		rate := int(fields[0]) % len(publishedWidths)
+		widths := publishedWidths[rate]
 		info := kinds[int(fields[1])%len(kinds)]
+		info.ScalefacCompress = int(fields[2] >> 2 & 1)
 		head := frame.Header{
 			SampleRate: widths.rate, Version: frame.MPEG1, Layer: frame.Layer3,
 			Mode: frame.JointStereo, Extension: fields[2] % 4,
 		}
 
+		if rate >= len(mpeg1Rates) {
+			head.Version = frame.MPEG2
+		}
+
 		factors := Scalefactors{}
+
 		if info.BlockType == ShortBlocks && info.MixedBlock {
 			factors.shift = mpeg1MixedShift
+			if head.Version != frame.MPEG1 {
+				factors.shift = lsfMixedShift
+			}
 		}
+
 		for at := range shortSent {
-			factors.values[at] = fields[3+at%(len(fields)-3)] % 16
+			field := fields[3+at%(len(fields)-3)]
+			factors.values[at] = field % 16
+
+			if head.Version != frame.MPEG1 {
+				factors.widest[at] = 1<<(field%5) - 1
+				factors.values[at] = field / 5 % (factors.widest[at] + 1)
+			}
 		}
 
 		var left, right [granuleLines]float64
@@ -284,7 +305,7 @@ func FuzzStereo(f *testing.F) {
 		}
 
 		places := linePlaces(&info, widths.long, widths.short)
-		wantLeft, wantRight := stereoOracle(head, &left, &right, &places, &factors)
+		wantLeft, wantRight := stereoOracle(head, &left, &right, &places, &info, &factors)
 
 		Stereo(head, &left, &right, &info, &factors)
 

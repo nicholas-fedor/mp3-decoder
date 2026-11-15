@@ -23,6 +23,8 @@ type Scalefactors struct {
 	shift int
 	// values holds the scalefactors in the order they are sent, then zeros for the last band.
 	values [scalefactorCount]uint8
+	// widest holds the largest value the width of each scalefactor in values holds.
+	widest [scalefactorCount]uint8
 	// preflag reports whether the pretab adds to the long bands.
 	preflag bool
 }
@@ -208,6 +210,7 @@ func (s *Scalefactors) readLSF(stream *bits.Reader, head frame.Header, info *Gra
 	}
 
 	clear(s.values[at:])
+	clear(s.widest[at:])
 }
 
 // readMPEG1 reads the MPEG-1 scalefactors of one channel's granule.
@@ -234,7 +237,7 @@ func (s *Scalefactors) readMPEG1(stream *bits.Reader, side *SideInfo, gr, ch int
 			s.readRun(stream, scfsiGroups[group], scfsiGroups[group+1], slen[group/2])
 		}
 
-		s.values[longBands-1] = 0
+		s.values[longBands-1], s.widest[longBands-1] = 0, 0
 
 		return
 	}
@@ -247,9 +250,12 @@ func (s *Scalefactors) readMPEG1(stream *bits.Reader, side *SideInfo, gr, ch int
 	s.readRun(stream, 0, shortFirst-s.shift, slen[0])
 	s.readRun(stream, shortFirst-s.shift, shortSent-s.shift, slen[1])
 	clear(s.values[shortSent-s.shift:])
+	clear(s.widest[shortSent-s.shift:])
 }
 
 // readRun reads scalefactors of one width into a run of values.
+//
+// It also keeps the largest value the width holds for each of them.
 //
 // Parameters:
 //   - stream: the main data, at the first scalefactor.
@@ -259,7 +265,32 @@ func (s *Scalefactors) readMPEG1(stream *bits.Reader, side *SideInfo, gr, ch int
 func (s *Scalefactors) readRun(stream *bits.Reader, from, to, width int) {
 	for at := from; at < to; at++ {
 		s.values[at] = uint8(stream.Read(width)) //nolint:gosec // A scalefactor is at most 4 bits wide.
+		s.widest[at] = 1<<width - 1
 	}
+}
+
+// widestLong returns the largest value the width of a long band's scalefactor holds.
+//
+// Parameters:
+//   - band: the long band, from 0 to 21, or to 7 in mixed blocks.
+//
+// Returns:
+//   - int: the largest value, 0 for a band that sends none.
+func (s *Scalefactors) widestLong(band int) int {
+	return int(s.widest[band])
+}
+
+// widestShort returns the largest value the width of a short band's scalefactor holds in one
+// window.
+//
+// Parameters:
+//   - band: the short band, from 0 to 12, or from 3 in mixed blocks.
+//   - window: the window, from 0 to 2.
+//
+// Returns:
+//   - int: the largest value, 0 for a band that sends none.
+func (s *Scalefactors) widestShort(band, window int) int {
+	return int(s.widest[band*windows+window-s.shift])
 }
 
 // widths returns the width of each partition's scalefactors for a scalefac_compress value in the
