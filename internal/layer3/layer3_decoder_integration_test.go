@@ -122,7 +122,7 @@ func TestDecodeResync(t *testing.T) {
 }
 
 // TestDecodePreroll checks that a decoder reset and started as many frames before a frame as
-// Preroll gives decodes that frame bit for bit as the whole stream does.
+// frame.Header.Preroll gives decodes that frame bit for bit as the whole stream does.
 //
 // The decoder is reset after decoding other frames of the stream, so a Reset that kept any state
 // would change the frames that start the stream.
@@ -135,7 +135,7 @@ func TestDecodePreroll(t *testing.T) {
 
 			frames := encodedFrames(t, name)
 			first, _ := frame.Parse(frames[0])
-			preroll := layer3.Preroll(first)
+			preroll := first.Preroll()
 			samples := first.Samples()
 
 			var steady, started layer3.Decoder

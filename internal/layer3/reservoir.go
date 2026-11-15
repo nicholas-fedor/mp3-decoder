@@ -17,8 +17,9 @@ type Reservoir struct {
 	filled int
 }
 
-// reservoirSize is the most bytes the reservoir holds, the largest 9-bit main_data_begin.
-const reservoirSize = 1<<mpeg1Begin - 1
+// reservoirSize is the most bytes the reservoir holds, as far back as any frame's main data may
+// begin.
+const reservoirSize = frame.MaxMainDataBegin
 
 // MainData returns a frame's main data and adds the frame's own main data to the reservoir.
 //

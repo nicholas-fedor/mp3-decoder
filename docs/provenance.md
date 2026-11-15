@@ -64,7 +64,7 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `mp3`: gapless playback, leaving out the encoder delay, the padding and the 529-sample decoder delay | FFmpeg, libavformat/mp3dec.c (mp3_parse_vbr_tags). mpg123, src/libmpg123/frame.c (INT123_frame_gapless_init) and src/libmpg123/frame.h (lastframe). LAME technical FAQ |
 | `mp3`: a frame that fails to decode giving silence | mpg123, src/libmpg123/libmpg123.c (decode_the_frame) |
 | `mp3`: the frame index, its step doubling as it fills | mpg123, src/libmpg123/index.c (fi_shrink and INT123_fi_add) |
-| `layer3`, `mp3`: the frames decoded before a seek's target, from the reservoir's reach and the granules the filterbanks carry | The reservoir and filterbank state of this decoder. mpg123, src/libmpg123/frame.c (ignoreframe) decodes a fixed number of frames instead |
+| `frame`, `mp3`: the frames decoded before a seek's target, from the reservoir's reach and the granules the filterbanks carry | The reservoir and filterbank state of this decoder. mpg123, src/libmpg123/frame.c (ignoreframe) decodes a fixed number of frames instead |
 | `mp3`: a frame whose CRC does not match decoded all the same | FFmpeg, libavcodec/mpegaudiodec_template.c (handle_crc). mpg123, src/libmpg123/parse.c, which skips the CRC |
 | `trig`: π and cosines | Machin's formula and the Taylor series of the cosine |
 

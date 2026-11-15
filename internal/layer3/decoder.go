@@ -37,13 +37,8 @@ type Decoder struct {
 	channels int
 }
 
-// Decoding sizes.
-const (
-	// granulePCM is the number of PCM samples a granule gives for each channel.
-	granulePCM = hybrid.Samples * synth.Subbands
-	// carriedGranules is how many granules before a granule the filterbanks carry samples from.
-	carriedGranules = 2
-)
+// granulePCM is the number of PCM samples a granule gives for each channel.
+const granulePCM = hybrid.Samples * synth.Subbands
 
 // Decode decodes the audio of one frame.
 //
@@ -196,30 +191,6 @@ func (d *Decoder) synthesize(dst [][2]float64, head frame.Header, gr, ch int) {
 			dst[at*synth.Subbands+sample][ch] = value
 		}
 	}
-}
-
-// Preroll returns how many frames before a frame decoding must start for that frame to decode as
-// it does in the whole stream.
-//
-// A frame's main data may begin up to 511 bytes back in MPEG-1 and 255 bytes back otherwise, so
-// the frames decoded first must fill the bit reservoir that far. The filterbanks carry samples of
-// each granule into the next two, so the two granules before the frame must also decode from
-// their own main data.
-//
-// Parameters:
-//   - head: the header of a frame of the stream.
-//
-// Returns:
-//   - int: the number of frames.
-func Preroll(head frame.Header) int {
-	reach, granules := 1<<lsfBegin-1, lsfGranules
-	if head.Version == frame.MPEG1 {
-		reach, granules = reservoirSize, mpeg1Granules
-	}
-
-	data := max(head.MinDataSize(), 1)
-
-	return (reach+data-1)/data + (carriedGranules+granules-1)/granules
 }
 
 // hybridBlock returns which subbands of a granule hold long blocks, and their windows.

@@ -116,13 +116,14 @@ func TestIMDCT(t *testing.T) {
 // imdct turns 2n lines into the 4n samples of their IMDCT, as the generated kernels unroll it.
 //
 // Sample i is the sum over the lines X(k) of X(k) cos(π/(8n) (2i+1+2n)(2k+1)). Those angles fold
-// onto the DCT-IV of the lines, c(j), the sum over k of X(k) cos(π/(8n) (2j+1)(2k+1)): sample i is
+// onto the DCT-IV of the lines, c(j), the sum over k of X(k) cos(π/(8n) (2j+1)(2k+1)). Sample i is
 // c(n+i) below n, -c(3n-1-i) below 3n, and -c(i-3n) after.
 //
 // The DCT-IV comes from a DCT-II. Scaled by 1/(2 cos(π(2k+1)/(8n))), the lines give a DCT-II D
 // with c(j) = D(j) + D(j+1), and D(2n) taken as 0. Byeong Gi Lee's split then turns the DCT-II of
-// 2n points into two of n points: of the sums y(k) + y(2n-1-k) for the even outputs, and of the
-// differences scaled by 1/(2 cos(π(2k+1)/(4n))) for the odd outputs, which add two neighbors.
+// 2n points into two of n points. The DCT of the sums y(k) + y(2n-1-k) gives the even outputs. The
+// DCT of the differences, scaled by 1/(2 cos(π(2k+1)/(4n))), gives the odd outputs, each of which
+// adds two neighbors.
 //
 // Each DCT of n points folds its values in pairs, since value k and value n-1-k meet the same
 // cosine, the second with the sign (-1)^m. An even output sums the pairs' sums and adds or takes

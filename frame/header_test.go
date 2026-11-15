@@ -273,7 +273,34 @@ func TestHeaderMinDataSize(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		assert.Equal(t, tt.want, tt.head.MinDataSize(), tt.name)
+		assert.Equal(t, tt.want, tt.head.minDataSize(), tt.name)
+	}
+}
+
+// TestHeaderPreroll checks the frames that refill the bit reservoir, then those that refill the
+// filterbanks, from the smallest frame of each stream.
+func TestHeaderPreroll(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		head Header
+		want int
+	}{
+		// 511 bytes in frames of 104 - 38 bytes, then one frame of two granules.
+		{"MPEG-1 at 44.1 kHz", Header{SampleRate: 44100, Version: MPEG1, Layer: Layer3}, 8 + 1},
+		// 511 bytes in frames of 96 - 38 bytes.
+		{"MPEG-1 at 48 kHz", Header{SampleRate: 48000, Version: MPEG1, Layer: Layer3}, 9 + 1},
+		// 255 bytes in frames of 24 - 23 bytes, then two frames of one granule.
+		{"MPEG-2 at 24 kHz", Header{SampleRate: 24000, Version: MPEG2, Layer: Layer3}, 255 + 2},
+		// 255 bytes in frames of 72 - 23 bytes.
+		{"MPEG-2.5 at 8 kHz", Header{SampleRate: 8000, Version: MPEG25, Layer: Layer3}, 6 + 2},
+		// 511 bytes in frames of 326 - 38 bytes.
+		{"free format", Header{SampleRate: 44100, Bitrate: 100000, Version: MPEG1, Layer: Layer3, Free: true}, 2 + 1},
+	}
+
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.head.Preroll(), tt.name)
 	}
 }
 

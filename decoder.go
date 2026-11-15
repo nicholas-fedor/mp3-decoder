@@ -277,7 +277,7 @@ func (d *Decoder) Seek(ctx context.Context, sample int64) error {
 	target := d.padding.locate(sample)
 	samples := int64(d.scanner.first.Samples())
 
-	err := d.scanner.seek(ctx, max(target/samples-int64(layer3.Preroll(d.scanner.first)), 0))
+	err := d.scanner.seek(ctx, max(target/samples-int64(d.scanner.first.Preroll()), 0))
 	if err != nil {
 		return err
 	}

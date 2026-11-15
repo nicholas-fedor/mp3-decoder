@@ -81,6 +81,10 @@ const (
 // Only a free-format frame reaches it. The largest frame at a fixed bitrate holds 1729 bytes.
 const MaxSize = 3456
 
+// MaxMainDataBegin is the furthest back a Layer III frame's main data may begin, in bytes, which
+// is the largest 9-bit main_data_begin of MPEG-1.
+const MaxMainDataBegin = 1<<9 - 1
+
 // MaxSamples is the most samples a frame holds for each channel, those of a Layer II frame or an
 // MPEG-1 Layer III frame.
 const MaxSamples = 1152
@@ -133,6 +137,11 @@ const (
 	bitsPerByte = 8
 	// stereoChannels is the number of channels in every mode but mono.
 	stereoChannels = 2
+	// lsfMainDataBegin is the furthest back a Layer III frame's main data may begin at the lower
+	// sampling frequencies, in bytes, which is the largest 8-bit main_data_begin.
+	lsfMainDataBegin = 1<<8 - 1
+	// carriedGranules is how many granules before a granule the filterbanks carry samples from.
+	carriedGranules = 2
 )
 
 // Layer III side information sizes in bytes.
@@ -218,26 +227,26 @@ func (h Header) DataAt() int {
 	return at
 }
 
-// MinDataSize returns the fewest bytes after the side information that a frame of the header's
-// stream holds.
+// Preroll returns how many frames before a frame of a Layer III stream decoding must start for
+// that frame to decode as it does in the whole stream.
 //
-// The frames of a stream may change their bitrate and mode and whether a CRC follows the header,
-// so the smallest is a frame at the stream's lowest bitrate with no padding, a CRC and the side
-// information of two channels. A free-format stream keeps its bitrate.
+// A frame's main data may begin up to 511 bytes back in MPEG-1 and 255 bytes back otherwise, so
+// the frames decoded first must fill the bit reservoir that far, even when they are the
+// smallest frames the stream could hold. The filterbanks carry samples of each granule into the
+// next two, so the two granules before the frame must also decode from their own main data.
 //
 // Returns:
-//   - int: the size in bytes, or 0 when the smallest frame holds nothing after its side
-//     information or the bitrate of a free-format stream is unknown.
-func (h Header) MinDataSize() int {
-	smallest := h
-
-	smallest.Mode, smallest.Padding, smallest.Protected = Stereo, false, true
-
-	if !h.Free {
-		smallest.Bitrate = bitrate(h.Version, h.Layer, 1)
+//   - int: the number of frames.
+func (h Header) Preroll() int {
+	reach := lsfMainDataBegin
+	if h.Version == MPEG1 {
+		reach = MaxMainDataBegin
 	}
 
-	return max(smallest.Size()-smallest.DataAt(), 0)
+	data := max(h.minDataSize(), 1)
+	granules := h.Samples() / shortSamples
+
+	return (reach+data-1)/data + (carriedGranules+granules-1)/granules
 }
 
 // SameStream reports whether two headers can belong to the same stream.
@@ -301,6 +310,28 @@ func (h Header) Size() int {
 	}
 
 	return h.Samples()*h.Bitrate/(bitsPerByte*h.slot()*h.SampleRate)*h.slot() + h.padding()
+}
+
+// minDataSize returns the fewest bytes after the side information that a frame of the header's
+// stream holds.
+//
+// The frames of a stream may change their bitrate and mode and whether a CRC follows the header,
+// so the smallest is a frame at the stream's lowest bitrate with no padding, a CRC and the side
+// information of two channels. A free-format stream keeps its bitrate.
+//
+// Returns:
+//   - int: the size in bytes, or 0 when the smallest frame holds nothing after its side
+//     information or the bitrate of a free-format stream is unknown.
+func (h Header) minDataSize() int {
+	smallest := h
+
+	smallest.Mode, smallest.Padding, smallest.Protected = Stereo, false, true
+
+	if !h.Free {
+		smallest.Bitrate = bitrate(h.Version, h.Layer, 1)
+	}
+
+	return max(smallest.Size()-smallest.DataAt(), 0)
 }
 
 // padding returns the size of the frame's padding.

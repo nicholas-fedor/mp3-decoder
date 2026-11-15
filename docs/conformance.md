@@ -16,7 +16,7 @@ The decoder is measured against the MPEG audio conformance streams that ISO publ
 
 ## Streams
 
-ISO's archive `compressedMpeg12.zip` holds 40 Layer III streams, and `referencesWav.zip` holds their references. The stream names give the version: `l3_1xxxx` streams are MPEG-1, `l3_2xxxx` streams MPEG-2 and `l3_25xxx` streams MPEG-2.5. The Layer I and Layer II streams are published only as MP4 files in `compressedMp4.zip` and are not measured.
+ISO's archive `compressedMpeg12.zip` holds 40 Layer III streams, and `referencesWav.zip` holds their references. The stream names give the version. `l3_1xxxx` streams are MPEG-1, `l3_2xxxx` streams are MPEG-2, and `l3_25xxx` streams are MPEG-2.5. The Layer I and Layer II streams are published only as MP4 files in `compressedMp4.zip` and are not measured.
 
 ISO's licence forbids redistributing the streams, so they are never committed. The package `internal/conformance` lists each stream and reference with the MD5 checksum ISO publishes in `mpeg4audio-conformance2ndEd_20230125.md5`.
 
