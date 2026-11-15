@@ -1,0 +1,15 @@
+# Normalize text files to LF line endings
+* text=auto eol=lf
+
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+
+# The audio fixtures and the samples decoded from them are binary
+*.mp3 binary
+*.mp2 binary
+*.f32 binary

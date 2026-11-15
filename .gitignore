@@ -1,0 +1,20 @@
+# Test binaries, built with `go test -c`
+*.test
+
+# The coverage profile that task test writes
+coverage.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Fuzz caches, outside testdata/fuzz
+testdata/fuzz/**/corpus/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,202 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+silent: true
+
+vars:
+  LINT_CONFIG: build/golangci-lint/golangci-lint.yaml
+  PKGS:
+    sh: go list ./... | tr '\n' ' '
+  # RACE turns on the race detector, which needs cgo. Set MP3_DECODER_RACE to an empty value
+  # where no C toolchain exists.
+  RACE:
+    sh: echo "${MP3_DECODER_RACE--race}"
+  # CONFORMANCE is the cache of the ISO MPEG audio conformance streams, which the conformance test
+  # reads. Set MP3_DECODER_CONFORMANCE to move it.
+  CONFORMANCE:
+    sh: echo "${MP3_DECODER_CONFORMANCE:-${XDG_CACHE_HOME:-$HOME/.cache}/mp3-decoder/conformance}"
+
+tasks:
+  default:
+    desc: "Show available tasks"
+    cmds:
+      - task --list-all
+
+  fmt:
+    desc: "Format code with golangci-lint fmt and align structs with betteralign"
+    cmds:
+      - golangci-lint fmt --config {{.LINT_CONFIG}} ./...
+      - betteralign -apply ./...
+
+  vet:
+    desc: "Run go vet for the host and for Linux, macOS and Windows without cgo"
+    cmds:
+      - go vet ./...
+      - GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go vet ./...
+      - GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go vet ./...
+      - GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go vet ./...
+
+  modernize:
+    desc: "Fail when go fix suggests modernizations, or apply them with FIX=true"
+    cmds:
+      - |
+        if [ "{{.FIX}}" = "true" ]; then
+          go fix ./...
+        else
+          out="$(go fix -diff ./...)"
+          if [ -n "$out" ]; then
+            echo "$out"
+            echo "go fix suggests changes, run FIX=true task modernize"
+            exit 1
+          fi
+        fi
+
+  conformance:
+    desc: "Fill the cache of ISO MPEG audio conformance streams, fetching only the files it lacks"
+    cmds:
+      - go run ./internal/conformance/fetch -dir "{{.CONFORMANCE}}"
+
+  test:
+    desc: "Fetch the conformance streams, then run tests with race detection and a coverage gate"
+    vars:
+      COVERAGE_MIN: "80"
+    env:
+      MP3_DECODER_CONFORMANCE: "{{.CONFORMANCE}}"
+    cmds:
+      - task: conformance
+      - go test {{.RACE}} -count=1 -coverprofile=coverage.out {{.PKGS}}
+      - |
+        go tool cover -func=coverage.out \
+          | awk -v min={{.COVERAGE_MIN}} '/^total:/ { gsub(/%/, "", $3);
+              if ($3 + 0 < min + 0) {
+                printf "coverage %.1f%% is below the %s%% gate\n", $3, min
+                exit 1
+              }
+              printf "coverage %.1f%% meets the %s%% gate\n", $3, min }'
+
+  test:fma:
+    desc: "Rerun the tests where products fuse into multiply-adds, at GOAMD64=v3 and on arm64 where qemu-aarch64 is installed"
+    # Go may fuse a product with a sum, which changes the decoded bits unless every product is
+    # converted. amd64 fuses only at GOAMD64=v3, and only when both operands sit in registers.
+    # arm64 fuses every such pair, so its run is the stronger check.
+    platforms: [linux/amd64]
+    env:
+      MP3_DECODER_CONFORMANCE: "{{.CONFORMANCE}}"
+    cmds:
+      - task: conformance
+      - GOAMD64=v3 go test -count=1 ./...
+      - |
+        if command -v qemu-aarch64 >/dev/null; then
+          GOARCH=arm64 CGO_ENABLED=0 go test -exec qemu-aarch64 -count=1 ./...
+        else
+          echo "test:fma: qemu-aarch64 is not installed, so the decoder is not tested on arm64"
+        fi
+
+  lint:
+    desc: "Check go.mod is tidy, then run golangci-lint and betteralign"
+    cmds:
+      - go mod tidy -diff
+      - golangci-lint run --config {{.LINT_CONFIG}} ./...
+      - betteralign ./...
+
+  bench:
+    desc: "Run benchmarks"
+    cmds:
+      - go test -bench=. -benchmem -run='^$' {{.PKGS}}
+
+  fuzz:
+    desc: "Run fuzz targets for 30s each, or FUZZTIME=<duration> to override"
+    # go test fuzzes one target in one package per run, so the loop lists each package's fuzz
+    # targets and runs them one at a time, anchored so that one name cannot match another.
+    cmds:
+      - |
+        set -eu
+        for pkg in {{.PKGS}}; do
+          for target in $(go test -list '^Fuzz' "$pkg" | grep '^Fuzz' || true); do
+            echo "fuzzing $pkg $target"
+            go test -run='^$' -fuzz="^${target}\$" -fuzztime={{.FUZZTIME | default "30s"}} "$pkg"
+          done
+        done
+
+  vuln:
+    desc: "Report known vulnerabilities in the dependency graph"
+    cmds:
+      - govulncheck ./...
+
+  update:
+    desc: "Update every dependency, test-only ones included, to its latest release and tidy go.mod"
+    cmds:
+      - go get -u -t ./...
+      - go mod tidy
+
+  tag:bump-major:
+    desc: "Tag the next major release on main, vX.0.0, and push it to origin"
+    cmds:
+      - task: tag:release
+        vars: { PART: major }
+
+  tag:bump-minor:
+    desc: "Tag the next minor release on main, vX.Y.0, and push it to origin"
+    cmds:
+      - task: tag:release
+        vars: { PART: minor }
+
+  tag:bump-patch:
+    desc: "Tag the next patch release on main, vX.Y.Z, and push it to origin"
+    cmds:
+      - task: tag:release
+        vars: { PART: patch }
+
+  tag:release:
+    internal: true
+    # The latest release is the highest vX.Y.Z tag, prereleases aside, or v0.0.0 before the first.
+    # The guards refuse a release from another branch, from uncommitted changes, from commits
+    # origin/main lacks or lacks no longer, and of a commit that already has a release tag.
+    requires:
+      vars:
+        - name: PART
+          enum: [major, minor, patch]
+    vars:
+      # Fetching first counts the releases tagged elsewhere.
+      LATEST:
+        sh: |
+          git fetch --quiet --tags origin main
+          git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1
+      NEXT:
+        sh: |
+          echo "{{.LATEST | default "v0.0.0"}}" | awk -F. -v part={{.PART}} '{
+            major = substr($1, 2); minor = $2; patch = $3
+            if (part == "major") { major++; minor = 0; patch = 0 }
+            if (part == "minor") { minor++; patch = 0 }
+            if (part == "patch") { patch++ }
+            printf "v%d.%d.%d\n", major, minor, patch }'
+    preconditions:
+      - sh: '[ "$(git branch --show-current)" = main ]'
+        msg: "Releases are tagged on main"
+      - sh: '[ -z "$(git status --porcelain)" ]'
+        msg: "Commit or stash the changes in the working tree first"
+      - sh: '[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ]'
+        msg: "main must match origin/main, so pull or push first"
+      - sh: '[ -z "$(git tag --points-at HEAD | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+$")" ]'
+        msg: "HEAD already has a release tag"
+    prompt: "Tag {{.NEXT}} after {{.LATEST | default \"no release\"}} and push it to origin?"
+    cmds:
+      - git tag {{.NEXT}} -m "Release {{.NEXT}}"
+      - git push origin {{.NEXT}}
+
+  check:
+    desc: "Run fmt, vet, modernize, test, test:fma, lint, then vuln"
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: modernize
+      - task: test
+      - task: test:fma
+      - task: lint
+      - task: vuln
+
+  clean:
+    desc: "Remove the coverage profile"
+    cmds:
+      - rm -f coverage.out
