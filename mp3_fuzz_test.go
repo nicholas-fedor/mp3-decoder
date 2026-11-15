@@ -160,3 +160,53 @@ func FuzzJoin(f *testing.F) {
 		checkJoin(t, chosen.data, chosen.starts, chosen.want, 1+int(at)%(chosen.end-1))
 	})
 }
+
+// FuzzSeek seeks a fixture opened as a file to any samples, and checks that the samples after each
+// seek are those of a decode from the start, bit for bit.
+//
+// Each fixture is taken alone and joined to a copy of itself, which a walk indexes. The fuzzer
+// picks the fixture, then for each seek two bytes for the sample and one for the samples read
+// after it. The seed corpus seeks each fixture to its end, its start and its middle.
+func FuzzSeek(f *testing.F) {
+	type fixture struct {
+		data []byte
+		want [][2]float64
+	}
+
+	names := []string{"mpeg1-joint.mp3", "mpeg1-mono.mp3", "protected.mp3", "mpeg2.mp3", "mpeg25.mp3", "free.mp3"}
+	fixtures := make([]fixture, 0, 2*len(names))
+
+	for _, name := range names {
+		data, err := os.ReadFile("testdata/" + name)
+		require.NoError(f, err)
+
+		for _, stream := range [][]byte{data, slices.Concat(data, data)} {
+			fixtures = append(fixtures, fixture{data: stream, want: readAll(f, openFile(f, stream), 1000)})
+		}
+	}
+
+	for pick := range fixtures {
+		f.Add(uint8(pick), []byte{0xff, 0xff, 10, 0, 0, 200, 0x80, 0, 30})
+	}
+
+	f.Fuzz(func(t *testing.T, pick uint8, seeks []byte) {
+		chosen := fixtures[int(pick)%len(fixtures)]
+		length := int64(len(chosen.want))
+
+		decoder := openFile(t, chosen.data)
+		buffer := make([][2]float64, 256*16)
+
+		for ; len(seeks) >= 3; seeks = seeks[3:] {
+			target := (int64(seeks[0])<<8 | int64(seeks[1])) * length / 0xffff
+
+			require.NoError(t, decoder.Seek(t.Context(), target))
+			require.Equal(t, target, decoder.Position())
+
+			read := readFull(t, decoder, buffer[:min(16*(int64(seeks[2])+1), length-target)])
+
+			if !slices.Equal(chosen.want[target:target+int64(read)], buffer[:read]) {
+				require.Failf(t, "the samples differ", "after a seek to sample %d of %d", target, length)
+			}
+		}
+	})
+}

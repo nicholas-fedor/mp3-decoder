@@ -121,6 +121,50 @@ func TestDecodeResync(t *testing.T) {
 	assert.Equal(t, want, got, "the output has not converged 8 frames after the resync")
 }
 
+// TestDecodePreroll checks that a decoder reset and started as many frames before a frame as
+// Preroll gives decodes that frame bit for bit as the whole stream does.
+//
+// The decoder is reset after decoding other frames of the stream, so a Reset that kept any state
+// would change the frames that start the stream.
+func TestDecodePreroll(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range encodedFiles {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			frames := encodedFrames(t, name)
+			first, _ := frame.Parse(frames[0])
+			preroll := layer3.Preroll(first)
+			samples := first.Samples()
+
+			var steady, started layer3.Decoder
+
+			whole := make([][2]float64, len(frames)*samples)
+
+			for at, data := range frames {
+				head, _ := frame.Parse(data)
+				require.NoError(t, steady.Decode(whole[at*samples:], head, data))
+			}
+
+			got := make([][2]float64, samples)
+
+			for target := range frames {
+				started.Reset()
+
+				for _, data := range frames[max(target-preroll, 0) : target+1] {
+					head, _ := frame.Parse(data)
+					require.NoError(t, started.Decode(got, head, data))
+				}
+
+				if !slices.Equal(whole[target*samples:(target+1)*samples], got) {
+					require.Failf(t, "frame decodes otherwise", "frame %d with %d frames before it", target, preroll)
+				}
+			}
+		})
+	}
+}
+
 // TestDecodeChannelChange checks that the frames after a change between mono and stereo decode as
 // a fresh decoder decodes them, since both channels' filterbanks start afresh.
 //

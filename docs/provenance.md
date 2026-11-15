@@ -60,6 +60,9 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `mp3`: the stream ending where frames of another version, layer or sampling frequency start | mpg123, src/libmpg123/parse.c (read_frame with MPG123_NO_FRANKENSTEIN) |
 | `mp3`: the length from a tag frame whose byte count matches the audio, otherwise from a walk over the frames | FFmpeg, libavformat/mp3dec.c (mp3_parse_vbr_tags), which keeps the frame count unless the file exceeds the byte count by more than a sixteenth |
 | `mp3`: gapless playback, leaving out the encoder delay, the padding and the 529-sample decoder delay | FFmpeg, libavformat/mp3dec.c (mp3_parse_vbr_tags). mpg123, src/libmpg123/frame.c (INT123_frame_gapless_init) and src/libmpg123/frame.h (lastframe). LAME technical FAQ |
+| `mp3`: a frame that fails to decode giving silence | mpg123, src/libmpg123/libmpg123.c (decode_the_frame) |
+| `mp3`: the frame index, its step doubling as it fills | mpg123, src/libmpg123/index.c (fi_shrink and INT123_fi_add) |
+| `layer3`, `mp3`: the frames decoded before a seek's target, from the reservoir's reach and the granules the filterbanks carry | The reservoir and filterbank state of this decoder. mpg123, src/libmpg123/frame.c (ignoreframe) decodes a fixed number of frames instead |
 | `trig`: π and cosines | Machin's formula and the Taylor series of the cosine |
 
 No part adapts another decoder's code. The Huffman code tables and the synthesis window taps are data transcribed from FFmpeg.

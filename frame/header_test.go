@@ -250,6 +250,33 @@ func TestHeaderDataAt(t *testing.T) {
 	assert.Equal(t, 6, Header{Version: MPEG1, Layer: Layer2, Protected: true}.DataAt())
 }
 
+// TestHeaderMinDataSize checks the smallest frame of a stream against its lowest bitrate.
+func TestHeaderMinDataSize(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		head Header
+		want int
+	}{
+		// 1152*32000/(8*48000) = 96 bytes, less 4 + 2 + 32.
+		{"MPEG-1", Header{SampleRate: 48000, Bitrate: 320000, Version: MPEG1, Layer: Layer3, Mode: Mono}, 58},
+		// 576*8000/(8*24000) = 24 bytes, less 4 + 2 + 17.
+		{"MPEG-2", Header{SampleRate: 24000, Bitrate: 64000, Version: MPEG2, Layer: Layer3, Padding: true}, 1},
+		// 576*8000/(8*8000) = 72 bytes, less 4 + 2 + 17.
+		{"MPEG-2.5", Header{SampleRate: 8000, Bitrate: 8000, Version: MPEG25, Layer: Layer3}, 49},
+		// 1152*100000/(8*44100) = 326 bytes, less 4 + 2 + 32.
+		{"free format", Header{SampleRate: 44100, Bitrate: 100000, Version: MPEG1, Layer: Layer3, Free: true}, 288},
+		{"free format unmeasured", Header{SampleRate: 44100, Version: MPEG1, Layer: Layer3, Free: true}, 0},
+		// 1152*32000/(8*48000) = 96 bytes, less 4 + 2.
+		{"Layer II", Header{SampleRate: 48000, Bitrate: 192000, Version: MPEG1, Layer: Layer2}, 90},
+	}
+
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, tt.head.MinDataSize(), tt.name)
+	}
+}
+
 // TestHeaderSameStream checks that a stream may change its bitrate, padding and mode but not its
 // version, layer, sampling frequency or free format.
 func TestHeaderSameStream(t *testing.T) {

@@ -78,3 +78,38 @@ func TestPaddingKeep(t *testing.T) {
 		})
 	}
 }
+
+// TestPaddingLocate checks where kept samples lie in the stream, and that each is kept and has as
+// many kept samples before it as its number.
+func TestPaddingLocate(t *testing.T) {
+	t.Parallel()
+
+	lame := encoderPadding{skip: 1105, discard: 23155, resume: 24192}
+
+	tests := []struct {
+		name    string
+		padding encoderPadding
+		kept    int64
+		want    int64
+	}{
+		{"no padding", encoderPadding{}, 5000, 5000},
+		{"the first kept", lame, 0, 1105},
+		{"the last before the end padding", lame, 23155 - 1105 - 1, 23154},
+		{"the first past the frames the tag counts", lame, 23155 - 1105, 24192},
+		{"no frame count", encoderPadding{skip: 1105, discard: math.MaxInt64, resume: math.MaxInt64}, 1e9, 1e9 + 1105},
+		{"padding longer than the frames", encoderPadding{skip: 1105, discard: 1000, resume: 1152}, 0, 1152},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tt.padding.locate(tt.kept)
+			assert.Equal(t, tt.want, got)
+			assert.Equal(t, tt.kept, tt.padding.kept(got))
+
+			from, to := tt.padding.keep(got, 1)
+			assert.Equal(t, [2]int{0, 1}, [2]int{from, to}, "the sample is padding")
+		})
+	}
+}

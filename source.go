@@ -13,12 +13,16 @@ import (
 type source struct {
 	// reader is the stream.
 	reader io.Reader
+	// file is the file the stream is read from, or nil for a stream that cannot seek.
+	file io.ReadSeeker
 	// buffer holds the bytes read, of which those from at on are unused.
 	buffer []byte
 	// at is the first unused byte in buffer.
 	at int
 	// passed counts the bytes of the stream moved past.
 	passed int64
+	// end is where the stream ends in file.
+	end int64
 	// ended reports whether the reader has returned io.EOF.
 	ended bool
 }
@@ -102,6 +106,25 @@ func (s *source) ensure(count int) error {
 		default:
 		}
 	}
+
+	return nil
+}
+
+// seek moves to a position in the file, emptying the buffer.
+//
+// Parameters:
+//   - offset: the position, at most where the stream ends.
+//
+// Returns:
+//   - error: a seek error.
+func (s *source) seek(offset int64) error {
+	_, err := s.file.Seek(offset, io.SeekStart)
+	if err != nil {
+		return fmt.Errorf("seek stream: %w", err)
+	}
+
+	s.reader = io.LimitReader(s.file, s.end-offset)
+	s.buffer, s.at, s.passed, s.ended = s.buffer[:0], 0, offset, false
 
 	return nil
 }

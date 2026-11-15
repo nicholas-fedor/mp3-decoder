@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"math"
 	"slices"
 	"testing"
 
@@ -51,19 +52,37 @@ func TestScanPastUnconfirmable(t *testing.T) {
 	}
 }
 
-// TestCountCanceled checks that a canceled walk over a stream's frames stops with the context's
-// error.
-func TestCountCanceled(t *testing.T) {
+// TestScannerSeek checks that seeks forward, back and past the end stand the scanner at the frame
+// wanted, and that a canceled walk stops with the context's error.
+func TestScannerSeek(t *testing.T) {
 	t.Parallel()
 
-	walker := scanner{source: source{reader: bytes.NewReader(frames(stereoHead, 3))}}
+	data := slices.Concat(frames(stereoHead, 2), []byte("junk"), frames(stereoHead, 3))
 
-	_, _, err := walker.open(t.Context())
-	require.NoError(t, err)
+	walker := scanner{source: source{reader: bytes.NewReader(data), file: bytes.NewReader(data), end: int64(len(data))}}
+	require.NoError(t, walker.open(t.Context()))
+
+	// The frames after the junk start 4 bytes later.
+	starts := []int64{0, 417, 838, 1255, 1672}
+
+	for _, target := range []int64{3, 1, 4, 0, 2, 2} {
+		require.NoError(t, walker.seek(t.Context(), target))
+		assert.Equal(t, target, walker.frames)
+
+		_, _, _, err := walker.frame()
+		require.NoError(t, err)
+		assert.Equal(t, starts[target]+417, walker.source.passed, "frame %d", target)
+	}
+
+	require.NoError(t, walker.seek(t.Context(), math.MaxInt64))
+	assert.Equal(t, int64(5), walker.frames)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	_, err = walker.count(ctx)
-	require.ErrorIs(t, err, context.Canceled)
+	require.NoError(t, walker.seek(ctx, 3), "a seek to an indexed frame walks no frames")
+
+	fresh := scanner{source: source{reader: bytes.NewReader(data), file: bytes.NewReader(data), end: int64(len(data))}}
+	require.NoError(t, fresh.open(t.Context()))
+	require.ErrorIs(t, fresh.seek(ctx, 3), context.Canceled)
 }

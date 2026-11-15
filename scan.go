@@ -16,42 +16,19 @@ import (
 // scanner finds the frames of a stream in its bytes.
 //
 // It steps over the tags a stream may carry, and passes over damage and junk to the next frame
-// that the header after it confirms. Its first frame fixes what the stream's frames must keep.
+// that the header after it confirms. Its first frame fixes what the stream's frames must keep. It
+// numbers the audio frames it finds from 0, and indexes where it found them.
 type scanner struct {
+	// index holds where the search for the frames started.
+	index frameIndex
 	// source buffers the stream.
 	source source
+	// tag is the stream's Xing, Info or VBRI tag, or the zero value when its first frame holds none.
+	tag container.Info
 	// first is the header of the stream's first frame.
 	first frame.Header
-}
-
-// count moves past every remaining frame of the stream, and returns how many samples they hold.
-//
-// Parameters:
-//   - ctx: cancels the walk.
-//
-// Returns:
-//   - int64: the number of samples.
-//   - error: a read error, or the context's error.
-func (s *scanner) count(ctx context.Context) (int64, error) {
-	var total int64
-
-	for {
-		err := ctx.Err()
-		if err != nil {
-			return 0, fmt.Errorf("count frames: %w", err)
-		}
-
-		head, _, _, err := s.frame()
-
-		switch {
-		case errors.Is(err, io.EOF):
-			return total, nil
-		case err != nil:
-			return 0, err
-		default:
-			total += int64(head.Samples())
-		}
-	}
+	// frames is the number of the next frame.
+	frames int64
 }
 
 // findFirst searches the stream for its first confirmed frame and stops at it.
@@ -95,6 +72,8 @@ func (s *scanner) findFirst(ctx context.Context) error {
 //   - bool: whether bytes before the frame were passed over as damage or junk.
 //   - error: [io.EOF] at the end of the stream, or a read error.
 func (s *scanner) frame() (frame.Header, []byte, bool, error) {
+	s.index.add(s.frames, s.source.passed)
+
 	head, resynced, err := s.nextFrame()
 	if err != nil {
 		return frame.Header{}, nil, false, err
@@ -118,6 +97,8 @@ func (s *scanner) frame() (frame.Header, []byte, bool, error) {
 	}
 
 	s.source.consume(len(data))
+
+	s.frames++
 
 	return head, data, resynced, nil
 }
@@ -158,37 +139,36 @@ func (s *scanner) nextFrame() (frame.Header, bool, error) {
 }
 
 // open moves past the tags at the start of the stream to its first confirmed frame, and past that
-// frame too when it holds a Xing, Info or VBRI tag.
+// frame too when it holds a Xing, Info or VBRI tag, which it keeps.
 //
 // Parameters:
 //   - ctx: cancels the search for the first frame.
 //
 // Returns:
-//   - container.Info: the tag of the tag frame.
-//   - bool: whether the first frame was a tag frame.
 //   - error: [ErrNoFrames], a read error, or the context's error.
-func (s *scanner) open(ctx context.Context) (container.Info, bool, error) {
+func (s *scanner) open(ctx context.Context) error {
 	for stepped := true; stepped; {
 		var err error
 
 		stepped, err = s.skipTag()
 		if err != nil {
-			return container.Info{}, false, err
+			return err
 		}
 	}
 
 	err := s.findFirst(ctx)
 	if err != nil {
-		return container.Info{}, false, err
+		return err
 	}
 
 	// The header that confirmed the first frame follows it, so the whole frame is buffered.
 	info, ok := container.ParseInfo(s.first, s.source.bytes()[:s.first.Size()])
 	if ok {
+		s.tag = info
 		s.source.consume(s.first.Size())
 	}
 
-	return info, ok, nil
+	return nil
 }
 
 // resync passes over bytes that are not a frame of the stream, to the next frame that the header
@@ -242,6 +222,48 @@ func (s *scanner) scan() (frame.Header, bool, error) {
 	default:
 		return frame.Header{}, false, s.source.ensure(len(s.source.bytes()) + readSize)
 	}
+}
+
+// seek moves to a frame of a file, or to the end of the stream when it holds fewer frames.
+//
+// It starts from the last indexed frame at or before the one wanted, unless the stream already
+// stands between them. It then moves past the frames up to the one wanted.
+//
+// Parameters:
+//   - ctx: cancels the walk.
+//   - target: the frame's number.
+//
+// Returns:
+//   - error: a read or seek error, or the context's error.
+func (s *scanner) seek(ctx context.Context, target int64) error {
+	from, offset, ok := s.index.before(target)
+	if ok && (target < s.frames || from > s.frames) {
+		err := s.source.seek(offset)
+		if err != nil {
+			return err
+		}
+
+		s.frames = from
+	}
+
+	for s.frames < target {
+		err := ctx.Err()
+		if err != nil {
+			return fmt.Errorf("seek frame: %w", err)
+		}
+
+		_, _, _, err = s.frame()
+
+		switch {
+		case errors.Is(err, io.EOF):
+			return nil
+		case err != nil:
+			return err
+		default:
+		}
+	}
+
+	return nil
 }
 
 // skipTag moves past a tag that starts at the stream's position.

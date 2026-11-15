@@ -6,7 +6,6 @@ package mp3
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"slices"
 	"testing"
@@ -16,24 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nicholas-fedor/mp3-decoder/frame"
-	"github.com/nicholas-fedor/mp3-decoder/internal/layer3"
 	"github.com/nicholas-fedor/mp3-decoder/internal/mp3test"
 )
-
-// Headers of the streams the tests build.
-var (
-	// stereoHead is an MPEG-1 Layer III stereo header at 128 kbit/s.
-	stereoHead = mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer3, Bitrate: 9}
-	// lsfHead is an MPEG-2 Layer III header at 64 kbit/s.
-	lsfHead = mp3test.Header{Version: mp3test.MPEG2, Layer: mp3test.Layer3, Bitrate: 8}
-	// layer2Head is an MPEG-1 Layer II header at 112 kbit/s.
-	layer2Head = mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer2, Bitrate: 8}
-	// freeHead is an MPEG-1 Layer III free-format header.
-	freeHead = mp3test.Header{Version: mp3test.MPEG1, Layer: mp3test.Layer3}
-)
-
-// errSource is the error the failing sources return.
-var errSource = errors.New("source failed")
 
 // TestOpenStream checks streams that open, with what comes before their first frame, and the
 // number of samples each holds.
@@ -192,8 +175,8 @@ func TestOpenErrors(t *testing.T) {
 	}{
 		{&failingSeeker{Reader: bytes.NewReader(long), seeks: 0}, errSource, "the seek to the end", false},
 		{&failingSeeker{Reader: bytes.NewReader(long), seeks: 1}, errSource, "the seek to the tail", false},
-		{&failingSeeker{Reader: bytes.NewReader(long), seeks: 2}, errSource, "the seek before the walk", false},
-		{&failingSeeker{Reader: bytes.NewReader(long), seeks: 3}, errSource, "the seek before decoding", false},
+		{&failingSeeker{Reader: bytes.NewReader(long), seeks: 2}, errSource, "the seek to the start", false},
+		{&failingSeeker{Reader: bytes.NewReader(long), seeks: 3}, errSource, "the seek back after the walk", false},
 		{&failingReader{Reader: bytes.NewReader(long), reads: 100}, errSource, "the read of the tail", false},
 		{&failingReader{Reader: bytes.NewReader(long), reads: len(long) + readSize + 100}, errSource, "a read in the walk", false},
 		{bytes.NewReader(bytes.Repeat([]byte{0xff}, 5000)), ErrNoFrames, "no frames", false},
@@ -219,8 +202,59 @@ func TestOpenErrors(t *testing.T) {
 	}
 }
 
-// TestReadEnds checks where a stream ends, and that a frame that fails to decode is reported and
-// moved past.
+// TestSeekErrors checks that a seek stops at a failing seek or read of the file, or at a canceled
+// walk.
+//
+// The stream's tag frame gives its length, so Open walks none of its frames and a seek far into
+// it walks them. Open reads the last 64 KiB and then one read of the start.
+func TestSeekErrors(t *testing.T) {
+	t.Parallel()
+
+	first := frames(stereoHead, 1)
+	mp3test.Place(first, frame.HeaderSize+32, mp3test.Tag{
+		Magic: "Info", Flags: uint32(mp3test.HasFrames | mp3test.HasBytes), Frames: 200, Size: 201 * 417,
+	}.Bytes())
+
+	trusted := slices.Concat(first, frames(stereoHead, 200))
+
+	tests := []struct {
+		file     io.ReadSeeker
+		name     string
+		canceled bool
+	}{
+		{&failingSeeker{Reader: bytes.NewReader(frames(stereoHead, 200)), seeks: 4}, "a seek of the file", false},
+		{&failingReader{Reader: bytes.NewReader(trusted), reads: tailSize + 3*readSize}, "a read in the walk", false},
+		// The walk ends at frame 141, 9 frames before the sample's, which ends at byte 59631.
+		{&failingReader{Reader: bytes.NewReader(trusted), reads: tailSize + 60000}, "a read in the decoding", false},
+		{bytes.NewReader(trusted), "canceled", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			decoder, err := Open(t.Context(), tt.file)
+			require.NoError(t, err)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			if tt.canceled {
+				cancel()
+			}
+
+			err = decoder.Seek(ctx, 150*frame.MaxSamples)
+			if tt.canceled {
+				require.ErrorIs(t, err, context.Canceled)
+			} else {
+				require.ErrorIs(t, err, errSource)
+			}
+		})
+	}
+}
+
+// TestReadEnds checks where a stream ends, and that a frame that fails to decode gives silence in
+// its place.
 func TestReadEnds(t *testing.T) {
 	t.Parallel()
 
@@ -259,13 +293,19 @@ func TestReadEnds(t *testing.T) {
 		decoder, err := OpenStream(t.Context(), bytes.NewReader(slices.Concat(frames(stereoHead, 2), broken, frames(stereoHead, 2))))
 		require.NoError(t, err)
 
-		got, err := readSamples(decoder)
-		require.ErrorIs(t, err, layer3.ErrBlockType)
-		assert.Len(t, got, 2*frame.MaxSamples)
+		read, err := decoder.Read(make([][2]float64, 2*frame.MaxSamples))
+		require.NoError(t, err)
+		require.Equal(t, 2*frame.MaxSamples, read)
 
-		got, err = readSamples(decoder)
+		// The broken frame must not hand out the samples of the frame before it.
+		for at := range decoder.pcm {
+			decoder.pcm[at] = [2]float64{1, 1}
+		}
+
+		got, err := readSamples(decoder)
 		require.ErrorIs(t, err, io.EOF)
-		assert.Len(t, got, 2*frame.MaxSamples)
+		require.Len(t, got, 3*frame.MaxSamples)
+		assert.Equal(t, make([][2]float64, frame.MaxSamples), got[:frame.MaxSamples])
 	})
 
 	t.Run("MPEG-2 frames", func(t *testing.T) {
@@ -310,84 +350,5 @@ func TestReadEnds(t *testing.T) {
 			require.ErrorIs(t, err, errSource)
 			assert.Len(t, got, 2*frame.MaxSamples)
 		})
-	}
-}
-
-// frames builds a count of silent frames of a header.
-//
-// A free-format header takes frames of 417 bytes.
-func frames(head mp3test.Header, count int) []byte {
-	size := 417
-
-	if parsed, _ := frame.Parse(head.Bytes()); !parsed.Free {
-		size = parsed.Size()
-	}
-
-	out := make([]byte, 0, size*count)
-
-	for range count {
-		out = append(out, head.Frame(size)...)
-	}
-
-	return out
-}
-
-// failingSeeker is a file whose seeks fail once a count of them has succeeded.
-type failingSeeker struct {
-	*bytes.Reader
-
-	// seeks is the number of seeks left to succeed.
-	seeks int
-}
-
-// Seek seeks as the reader does, or fails once the seeks have run out.
-func (f *failingSeeker) Seek(offset int64, whence int) (int64, error) {
-	if f.seeks == 0 {
-		return 0, errSource
-	}
-
-	f.seeks--
-
-	return f.Reader.Seek(offset, whence)
-}
-
-// failingReader is a file whose reads fail once they have handed out a count of bytes.
-type failingReader struct {
-	*bytes.Reader
-
-	// reads is the number of bytes left to hand out.
-	reads int
-}
-
-// Read reads as the reader does, up to the bytes left, and fails once they have run out.
-func (f *failingReader) Read(p []byte) (int, error) {
-	if f.reads == 0 {
-		return 0, errSource
-	}
-
-	read, err := f.Reader.Read(p[:min(len(p), f.reads)])
-	f.reads -= read
-
-	return read, err
-}
-
-// failAfter returns a source that hands out data, then fails.
-func failAfter(data []byte) io.Reader {
-	return io.MultiReader(bytes.NewReader(data), iotest.ErrReader(errSource))
-}
-
-// readSamples reads a decoder until an error, returning the samples before it.
-func readSamples(decoder *Decoder) ([][2]float64, error) {
-	var out [][2]float64
-
-	buffer := make([][2]float64, 1000)
-
-	for {
-		read, err := decoder.Read(buffer)
-		out = append(out, buffer[:read]...)
-
-		if err != nil {
-			return out, err
-		}
 	}
 }

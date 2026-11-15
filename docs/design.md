@@ -61,6 +61,7 @@ This document explains how the decoder is built and why, part by part. Each sect
   - [Tags and Damage Between Frames](#tags-and-damage-between-frames)
   - [End of a Stream](#end-of-a-stream)
   - [Gapless Playback](#gapless-playback)
+  - [Seeking](#seeking)
   - [Accuracy](#accuracy)
 - [Performance](#performance)
 
@@ -402,11 +403,13 @@ A stream may be opened at any byte, as on joining a radio stream. Decoding start
 
 FFmpeg drops the frame count only when the file is larger than the byte count by more than a sixteenth, which it takes for files joined together, and keeps it otherwise. `Len` must be exact, so this decoder takes the count only on an exact match. Every fixture's tag matches, so they open without a walk, and a fixture joined to a copy of itself is walked.
 
-`Len` counts every frame, so a frame that fails to decode makes the stream give fewer samples than it says. `mp3.OpenStream` knows no length.
+The walk also fills the frame index that [Seeking](#seeking) uses. `mp3.OpenStream` knows no length.
 
 ### Frame Decoding
 
 `layer3.Decoder` decodes a frame through every stage, granule by granule. It keeps what one frame passes to the next: the bit reservoir, the scalefactors that scfsi reuses, and each channel's filterbanks. A mono frame gives each sample to both channels, and samples are not clipped.
+
+A frame whose side information holds a value no encoder writes fails to decode. It gives silence in its place, as mpg123 fills such a frame with zeros. Every frame then keeps its samples, so `Len`, positions and seeks stay exact after damage.
 
 The hybrid filterbank takes the block of each granule from Layer III: every subband long, with the normal, start or stop window, for long blocks, none for short blocks, and those below where short band 3 starts for mixed blocks.
 
@@ -424,7 +427,7 @@ Any other bytes are damage or junk. The decoder passes over them to the next fra
 
 ### End of a Stream
 
-A stream ends where the source ends, or where a frame of another stream starts. Such a frame has another version, layer or sampling frequency. mpg123 plays on across that change unless it is told not to. `Read` hands out samples at one rate, so the stream ends there. A last frame that the stream ends inside is decoded from the bytes it holds, with zeros for the rest, as FFmpeg does, since its granules' main data often lies wholly in the bytes it holds or in the frames before it. A last frame cut inside its side information ends the stream before it. A frame that fails to decode is reported, and the next read continues with the frame after it.
+A stream ends where the source ends, or where a frame of another stream starts. Such a frame has another version, layer or sampling frequency. mpg123 plays on across that change unless it is told not to. `Read` hands out samples at one rate, so the stream ends there. A last frame that the stream ends inside is decoded from the bytes it holds, with zeros for the rest, as FFmpeg does, since its granules' main data often lies wholly in the bytes it holds or in the frames before it. A last frame cut inside its side information ends the stream before it.
 
 ### Gapless Playback
 
@@ -437,6 +440,28 @@ An encoder adds samples at the start of a stream, its delay, and pads the last f
 | At the end, without a frame count | None, and none at the start either | None | None |
 
 The decoder follows FFmpeg, whose frames past the count still play, so a stream that runs on past its tag's count loses no audio. mpg123's gapless output of each tagged fixture is exactly the samples of every frame less those, and each fixture decodes to exactly the 0.5 s its encoder took in.
+
+### Seeking
+
+`Seek` moves a file that `mp3.Open` opened to any sample, and the samples from there are those of a decode from the start, bit for bit. A frame's samples depend on more than its own bytes, in two ways:
+
+- Its main data may begin up to 511 bytes back in MPEG-1, and 255 bytes back at the lower sampling frequencies.
+- The hybrid filterbank's overlap and the polyphase synthesis carry samples of each granule into the next two.
+
+So decoding starts afresh enough frames earlier to cover both. The first frames must fill the bit reservoir that far even when they are the smallest frames the stream could hold. Those are frames at its lowest bitrate with a CRC and two channels. The frames of the two granules before the target's frame follow. Each stage keeps only this bounded past. The synthesis also sums its values in the same order wherever its ring buffer stands. So from the target's frame on, the state is the one a decode from the start reaches. The frames decoded first may give silence, and their samples are dropped. On a damaged stream, a frame in that span that fails to decode adds no main data to the reservoir, so the frames just after it may decode otherwise than from the start.
+
+| Stream | Smallest frame's main data | Frames for the reservoir | Frames for the filterbanks | Frames decoded first |
+| --- | --- | --- | --- | --- |
+| MPEG-1 at 32 kHz | 106 bytes | 5 | 1 | 6 |
+| MPEG-1 at 44.1 kHz | 66 bytes | 8 | 1 | 9 |
+| MPEG-1 at 48 kHz | 58 bytes | 9 | 1 | 10 |
+| MPEG-2 at 22.05 kHz | 3 bytes | 85 | 2 | 87 |
+| MPEG-2 at 24 kHz | 1 byte | 255 | 2 | 257 |
+| MPEG-2.5 at 8 kHz | 49 bytes | 6 | 2 | 8 |
+
+The bound needs no side information, so the frame to start from follows from frame numbers alone. mpg123 decodes 4 frames before the target by default, which suits most streams but can fall short of the reservoir's reach. On the fixtures, starting only 3 frames back already changes samples of the joint stereo and MPEG-2 fixtures.
+
+Frames are found through an index of where the search for each one starts, as mpg123 indexes them. It holds up to 1,024 entries. When it fills, it drops every other entry and doubles its step. The walk in `mp3.Open` fills it, and so does decoding. A seek past the frames indexed walks on from the last entry. A stream that `mp3.OpenStream` opened cannot seek.
 
 ### Accuracy
 

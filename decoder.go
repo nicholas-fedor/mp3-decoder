@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/nicholas-fedor/mp3-decoder/container"
 	"github.com/nicholas-fedor/mp3-decoder/frame"
@@ -28,8 +29,6 @@ type Decoder struct {
 	cut [frame.MaxSize]byte
 	// padding holds the samples the encoder added, which are left out.
 	padding encoderPadding
-	// decoded counts the samples of the frames decoded, those left out among them.
-	decoded int64
 	// length is the number of samples the stream decodes to, when known.
 	length int64
 	// known reports whether length is known.
@@ -45,6 +44,14 @@ var (
 	ErrNoFrames = errors.New("mp3: no frames found")
 	// ErrLayer is returned for a stream of Layer I or Layer II frames.
 	ErrLayer = errors.New("mp3: only Layer III streams are decoded")
+)
+
+// Errors from seeking.
+var (
+	// ErrNotSeekable is returned for a seek on a stream that [OpenStream] opened.
+	ErrNotSeekable = errors.New("mp3: only a file from Open can seek")
+	// ErrOutOfRange is returned for a seek to a sample outside the stream.
+	ErrOutOfRange = errors.New("mp3: sample outside the stream")
 )
 
 // Open opens a file for decoding from its start, and finds the number of samples it decodes to.
@@ -72,35 +79,32 @@ func Open(ctx context.Context, src io.ReadSeeker) (*Decoder, error) {
 		return nil, fmt.Errorf("seek stream: %w", err)
 	}
 
-	var walker scanner
-
-	walker.source.reader = io.LimitReader(src, end)
-
-	info, tagged, err := walker.open(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	total := info.Frames * int64(walker.first.Samples())
-
-	if !tagged || info.Frames == 0 || info.Bytes != end-walker.source.passed+int64(walker.first.Size()) {
-		total, err = walker.count(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	_, err = src.Seek(0, io.SeekStart)
-	if err != nil {
-		return nil, fmt.Errorf("seek stream: %w", err)
-	}
-
 	decoder, err := OpenStream(ctx, io.LimitReader(src, end))
 	if err != nil {
 		return nil, err
 	}
 
-	decoder.length, decoder.known = decoder.padding.kept(total), true
+	stream := &decoder.scanner
+
+	stream.source.file, stream.source.end = src, end
+
+	frames := stream.tag.Frames
+
+	if frames == 0 || stream.tag.Bytes != end-stream.source.passed+int64(stream.first.Size()) {
+		err = stream.seek(ctx, math.MaxInt64)
+		if err != nil {
+			return nil, err
+		}
+
+		frames = stream.frames
+
+		err = stream.seek(ctx, 0)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	decoder.length, decoder.known = decoder.padding.kept(frames*int64(stream.first.Samples())), true
 
 	return decoder, nil
 }
@@ -124,7 +128,7 @@ func OpenStream(ctx context.Context, src io.Reader) (*Decoder, error) {
 
 	decoder.scanner.source.reader = src
 
-	info, tagged, err := decoder.scanner.open(ctx)
+	err := decoder.scanner.open(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -133,17 +137,14 @@ func OpenStream(ctx context.Context, src io.Reader) (*Decoder, error) {
 		return nil, ErrLayer
 	}
 
-	if tagged {
-		decoder.padding = paddingOf(info, decoder.scanner.first)
-	}
+	decoder.padding = paddingOf(decoder.scanner.tag, decoder.scanner.first)
 
 	return decoder, nil
 }
 
 // Len returns the number of samples the stream decodes to.
 //
-// Only [Open] finds it. It counts every frame, so a frame that fails to decode makes the stream
-// give fewer samples.
+// Only [Open] finds it.
 //
 // Returns:
 //   - int64: the number of samples, from the first kept.
@@ -152,14 +153,23 @@ func (d *Decoder) Len() (int64, bool) {
 	return d.length, d.known
 }
 
+// Position returns the number of the sample that Read gives next, from 0 for the first kept.
+//
+// Returns:
+//   - int64: the sample's number.
+func (d *Decoder) Position() int64 {
+	return d.padding.kept(d.scanner.frames*int64(d.scanner.first.Samples())) - int64(len(d.pending))
+}
+
 // Read decodes the next samples into dst.
 //
 // ID3v2, ID3v1 and APEv2 tags between frames are stepped over. Other bytes that are not a frame of
 // the stream, such as damage or junk, are passed over to the next frame that the header after it
-// confirms. A frame whose main data began before them gives silence. The stream ends where a frame
-// of another stream starts, or where src ends. A last frame that src ends inside is decoded from
-// the bytes it holds, with zeros for the rest, when it holds its side information. A mono stream
-// gives each sample to both channels. The samples are not clipped.
+// confirms. A frame whose main data began before them gives silence. So does a frame that fails
+// to decode, and every frame thus keeps its place. The stream ends where a frame of another stream
+// starts, or where src ends. A last frame that src ends inside is decoded from the bytes it holds,
+// with zeros for the rest, when it holds its side information. A mono stream gives each sample to
+// both channels. The samples are not clipped.
 //
 // When the stream's tag gives the encoder delay and padding, the samples the encoder added are left
 // out. At the start these are the encoder delay and the 529 samples by which decoding delays the
@@ -171,7 +181,7 @@ func (d *Decoder) Len() (int64, bool) {
 //
 // Returns:
 //   - int: the number of samples decoded.
-//   - error: [io.EOF] after the last sample, unwrapped, or a read or decoding error.
+//   - error: [io.EOF] after the last sample, unwrapped, or a read error.
 func (d *Decoder) Read(dst [][2]float64) (int, error) {
 	decoded := 0
 
@@ -198,12 +208,64 @@ func (d *Decoder) Read(dst [][2]float64) (int, error) {
 	return decoded, nil
 }
 
-// decodeFrame decodes the next frame into pcm and hands its samples to pending.
+// Seek moves to a sample, so that Read gives it next.
 //
-// A frame that fails to decode is moved past, so the next call decodes the frame after it.
+// The samples Read gives from there are those a Read from the start gives, bit for bit. To restore
+// the bit reservoir and the filterbanks, decoding starts some frames before the sample's frame. It
+// starts up to 10 frames before in MPEG-1 and up to 257 at the lowest bitrate of MPEG-2. An index
+// of where the frames lie finds them. Reading the file fills it, and a seek past the frames
+// indexed walks the frames in between. Seeking to the number of samples [Decoder.Len] gives moves
+// to the end.
+//
+// Parameters:
+//   - ctx: cancels the walk.
+//   - sample: the sample's number, from 0 for the first kept.
 //
 // Returns:
-//   - error: [io.EOF] at the end of the stream, or a read or decoding error.
+//   - error: [ErrNotSeekable], [ErrOutOfRange], a read or seek error, or the context's error.
+func (d *Decoder) Seek(ctx context.Context, sample int64) error {
+	if d.scanner.source.file == nil {
+		return ErrNotSeekable
+	}
+
+	if sample < 0 || sample > d.length {
+		return fmt.Errorf("seek to sample %d of %d: %w", sample, d.length, ErrOutOfRange)
+	}
+
+	target := d.padding.locate(sample)
+	samples := int64(d.scanner.first.Samples())
+
+	err := d.scanner.seek(ctx, max(target/samples-int64(layer3.Preroll(d.scanner.first)), 0))
+	if err != nil {
+		return err
+	}
+
+	d.layer3.Reset()
+
+	d.pending = nil
+
+	for d.scanner.frames*samples <= target {
+		err = d.decodeFrame()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	// At the end of the stream, all the samples of the frame decoded last come before the sample. A
+	// tag whose frame count is wrong can also put the sample outside that frame.
+	d.pending = d.pending[min(max(sample-d.Position(), 0), int64(len(d.pending))):]
+
+	return nil
+}
+
+// decodeFrame decodes the next frame into pcm and hands its samples to pending.
+//
+// Returns:
+//   - error: [io.EOF] at the end of the stream, or a read error.
 func (d *Decoder) decodeFrame() error {
 	head, data, resynced, err := d.scanner.frame()
 	if err != nil {
@@ -223,16 +285,12 @@ func (d *Decoder) decodeFrame() error {
 	}
 
 	err = d.layer3.Decode(d.pcm[:], head, data)
-
-	at := d.decoded
-
-	d.decoded += int64(head.Samples())
-
 	if err != nil {
-		return fmt.Errorf("decode frame: %w", err)
+		// The frame gives silence, so the frames after it keep their samples' numbers.
+		clear(d.pcm[:head.Samples()])
 	}
 
-	from, to := d.padding.keep(at, head.Samples())
+	from, to := d.padding.keep((d.scanner.frames-1)*int64(head.Samples()), head.Samples())
 
 	d.pending = d.pcm[from:to]
 

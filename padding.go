@@ -88,3 +88,19 @@ func (p encoderPadding) keep(at int64, count int) (from, to int) {
 func (p encoderPadding) kept(total int64) int64 {
 	return max(min(p.discard, total)-p.skip, 0) + max(total-p.resume, 0)
 }
+
+// locate returns the number of the stream's sample that a kept sample is.
+//
+// Parameters:
+//   - kept: the kept sample's number, from 0 for the first kept.
+//
+// Returns:
+//   - int64: the sample's number in the stream.
+func (p encoderPadding) locate(kept int64) int64 {
+	before := max(p.discard-p.skip, 0)
+	if kept < before {
+		return p.skip + kept
+	}
+
+	return p.resume + kept - before
+}

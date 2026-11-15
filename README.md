@@ -11,7 +11,7 @@ A pure-Go MPEG audio decoder for MPEG-1, MPEG-2 and MPEG-2.5 audio in Layers I, 
 
 ## Status
 
-The decoder plays streams of MPEG-1, MPEG-2 and MPEG-2.5 Layer III frames, and decodes every Layer III stream of ISO's conformance package at full accuracy, as [Conformance](docs/conformance.md) records. It leaves out the encoder delay and padding a LAME tag gives, for gapless playback. Layers I and II and seeking are in development.
+The decoder plays streams of MPEG-1, MPEG-2 and MPEG-2.5 Layer III frames, and decodes every Layer III stream of ISO's conformance package at full accuracy, as [Conformance](docs/conformance.md) records. It leaves out the encoder delay and padding a LAME tag gives, for gapless playback, and seeks to any sample exactly. Layers I and II are in development.
 
 ## Usage
 
@@ -37,7 +37,7 @@ for {
 }
 ```
 
-Samples come as left and right pairs, unclipped, with full scale at 1. For a file, `mp3.Open` takes an `io.ReadSeeker` and also reports the number of samples through `Len`.
+Samples come as left and right pairs, unclipped, with full scale at 1. For a file, `mp3.Open` takes an `io.ReadSeeker` and also reports the number of samples through `Len`. It seeks to any sample through `Seek`, and `Position` reports the sample `Read` gives next.
 
 ## Packages
 

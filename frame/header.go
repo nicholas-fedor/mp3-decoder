@@ -218,6 +218,28 @@ func (h Header) DataAt() int {
 	return at
 }
 
+// MinDataSize returns the fewest bytes after the side information that a frame of the header's
+// stream holds.
+//
+// The frames of a stream may change their bitrate and mode and whether a CRC follows the header,
+// so the smallest is a frame at the stream's lowest bitrate with no padding, a CRC and the side
+// information of two channels. A free-format stream keeps its bitrate.
+//
+// Returns:
+//   - int: the size in bytes, or 0 when the smallest frame holds nothing after its side
+//     information or the bitrate of a free-format stream is unknown.
+func (h Header) MinDataSize() int {
+	smallest := h
+
+	smallest.Mode, smallest.Padding, smallest.Protected = Stereo, false, true
+
+	if !h.Free {
+		smallest.Bitrate = bitrate(h.Version, h.Layer, 1)
+	}
+
+	return max(smallest.Size()-smallest.DataAt(), 0)
+}
+
 // SameStream reports whether two headers can belong to the same stream.
 //
 // A stream keeps its version, layer and sampling frequency, and a free-format stream stays free
