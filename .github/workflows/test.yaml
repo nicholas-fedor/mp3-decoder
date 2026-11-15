@@ -18,8 +18,10 @@ on:
 permissions:
   contents: read # Set default read-only permissions
 
+# A called workflow sees its caller's github context, so the group names this workflow itself
+# rather than github.workflow, which would match the caller's group and deadlock.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: test-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

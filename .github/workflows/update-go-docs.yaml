@@ -2,14 +2,21 @@
 name: Refresh pkg.go.dev
 
 on:
-  - workflow_dispatch
-  - workflow_call
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The release tag to refresh, such as v0.1.0"
+        required: true
+        type: string
+  workflow_call: {}
 
 permissions:
   contents: read # Set default read-only permissions
 
+# A called workflow sees its caller's github context, so the group names this workflow itself
+# rather than github.workflow, which would match the caller's group and deadlock.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: refresh-pkg-go-dev-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -26,4 +33,7 @@ jobs:
         uses: nicholas-fedor/go-proxy-pull-action@8f784b07227e87c2d6555d3805c3a83e02e29227 # v1.1.52
         with:
           goproxy: https://proxy.golang.org
-          import_path: github.com/nicholas-fedor/mp3-decoder/
+          import_path: github.com/nicholas-fedor/mp3-decoder
+          # Empty when called by the Release workflow, whose tag the action then refreshes.
+          version: ${{ inputs.version }}
+          pkg-go-dev: true
