@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -220,6 +221,35 @@ func TestFetchInsecurePaths(t *testing.T) {
 	assert.Equal(t, 4, fetched)
 }
 
+// TestFetchReadOnlyCache checks that a fetch into a cache it cannot write to fails and fetches
+// nothing.
+//
+// Windows ignores the read-only attribute of a directory, so the test runs only where the cache
+// can be made read-only.
+func TestFetchReadOnlyCache(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows ignores the read-only attribute of a directory")
+	}
+
+	dir := t.TempDir()
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	served := serveArchives(t, isoArchives(t))
+	served.hook = func() { _ = os.Chmod(dir, 0o500) }
+
+	fetched, err := served.fetch(t, dir, testStreams())
+	require.Error(t, err)
+	assert.Zero(t, fetched)
+
+	require.NoError(t, os.Chmod(dir, 0o700))
+
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
 // TestFetchErrors checks every way a fetch fails, the files it fetched before failing, and that no
 // partial file stays in the cache.
 //
@@ -295,10 +325,6 @@ func TestFetchErrors(t *testing.T) {
 				require.NoError(t, os.Mkdir(filepath.Join(dir, "r1.wav"), 0o700))
 			},
 			fetched: 0, cache: []string{"r1.wav"}, check: anyError,
-		},
-		{
-			name: "cache is read-only", archives: isoArchives(t), base: "", streams: testStreams(), prepare: nil,
-			hook: func(dir string) { _ = os.Chmod(dir, 0o500) }, fetched: 0, cache: nil, check: anyError,
 		},
 		{
 			name: "file name taken", archives: isoArchives(t), base: "", streams: testStreams(), prepare: nil,
