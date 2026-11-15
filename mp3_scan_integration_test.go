@@ -15,6 +15,7 @@ import (
 
 	"github.com/nicholas-fedor/mp3-decoder"
 	"github.com/nicholas-fedor/mp3-decoder/frame"
+	"github.com/nicholas-fedor/mp3-decoder/internal/layer3"
 	"github.com/nicholas-fedor/mp3-decoder/internal/mp3test"
 )
 
@@ -109,21 +110,123 @@ func TestAnotherStream(t *testing.T) {
 	assert.Equal(t, decodeBytes(t, first), decodeBytes(t, slices.Concat(first, second)))
 }
 
+// TestJoin opens each fixture partway through and checks that the samples soon match the end of
+// the whole decode exactly, as on joining a radio stream.
+//
+// A first frame needs the header after it to confirm it, and a free-format one needs two. Cuts in
+// the last frames leave too few, so they are left out. The free-format fixture is cut more
+// sparsely, since each cut measures its frames anew.
+func TestJoin(t *testing.T) {
+	t.Parallel()
+
+	steps := map[string]int{
+		"mpeg1-joint.mp3": 7, "mpeg1-mono.mp3": 7, "protected.mp3": 7, "mpeg2.mp3": 7, "mpeg25.mp3": 3, "free.mp3": 211,
+	}
+
+	for name, step := range steps {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			data, starts := frameStarts(t, name)
+			want := decodeBytes(t, data)
+
+			last := len(starts) - 2
+			if head, _ := frame.Parse(data[starts[0]:]); head.Free {
+				last--
+			}
+
+			for cut := 1; cut < starts[last]; cut += step {
+				checkJoin(t, data, starts, want, cut)
+			}
+		})
+	}
+}
+
+// checkJoin decodes a fixture from a cut and checks it against the whole decode.
+//
+// Decoding starts at the first frame after the cut and gives every frame's samples from there.
+// The frames whose main data began before the cut give silence. Each frame reaches back at most
+// 511 bytes in MPEG-1 and 255 at the lower sampling frequencies, so at most that over the smallest
+// main data of the fixture's frames are silent. The two filterbanks then take up to two granules,
+// at most two frames, to hold only what came after the silence. From there the samples match.
+func checkJoin(tb testing.TB, data []byte, starts []int, want [][2]float64, cut int) {
+	tb.Helper()
+
+	head, ok := frame.Parse(data[starts[len(starts)-1]:])
+	require.True(tb, ok)
+
+	reach, smallest := 511, len(data)
+	if head.Version != frame.MPEG1 {
+		reach = 255
+	}
+
+	for at, start := range starts[:len(starts)-1] {
+		this, _ := frame.Parse(data[start:])
+		smallest = min(smallest, starts[at+1]-start-this.DataAt())
+	}
+
+	got := decodeBytes(tb, data[cut:])
+	first, _ := slices.BinarySearch(starts, cut)
+	settled := min(((reach+smallest-1)/smallest+2)*head.Samples(), len(got))
+
+	require.Len(tb, got, (len(starts)-first)*head.Samples(), "the samples after a cut at byte %d", cut)
+	assert.True(tb, slices.Equal(want[len(want)-len(got)+settled:], got[settled:]),
+		"the samples differ from the whole decode %d samples after a cut at byte %d", settled, cut)
+
+	silence := make([][2]float64, head.Samples())
+
+	for at := range silentFrames(tb, data, starts[first:]) {
+		assert.True(tb, slices.Equal(silence, got[at*head.Samples():(at+1)*head.Samples()]),
+			"frame %d after a cut at byte %d sounds, though its main data began before the cut", at, cut)
+	}
+}
+
+// silentFrames returns how many frames from the first decoded one begin their main data before it.
+//
+// Each of them reaches back further than the main data of the frames decoded before it.
+func silentFrames(tb testing.TB, data []byte, starts []int) int {
+	tb.Helper()
+
+	var side layer3.SideInfo
+
+	held := 0
+
+	for at, start := range starts {
+		head, ok := frame.Parse(data[start:])
+		require.True(tb, ok)
+		require.NoError(tb, side.Parse(head, data[start:]))
+
+		if side.MainDataBegin <= held || at+1 == len(starts) {
+			return at
+		}
+
+		held += starts[at+1] - start - head.DataAt()
+	}
+
+	return len(starts)
+}
+
 // frameStarts reads a fixture and finds where each of its frames starts, its Info frame first.
-func frameStarts(t *testing.T, name string) ([]byte, []int) {
-	t.Helper()
+//
+// The frames of a free-format fixture take the bitrate measured at its first frame.
+func frameStarts(tb testing.TB, name string) ([]byte, []int) {
+	tb.Helper()
 
 	data, err := os.ReadFile("testdata/" + name)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
-	at, _, ok := frame.Find(data, nil)
-	require.True(t, ok)
+	at, first, ok := frame.Find(data, nil)
+	require.True(tb, ok)
 
 	var starts []int
 
 	for at < len(data) {
 		head, ok := frame.Parse(data[at:])
-		require.True(t, ok)
+		require.True(tb, ok)
+
+		if head.Free {
+			head.Bitrate = first.Bitrate
+		}
 
 		starts = append(starts, at)
 		at += head.Size()
@@ -138,11 +241,11 @@ func insert(data []byte, at int, extra []byte) []byte {
 }
 
 // decodeBytes decodes a stream held in memory with reads of 1000 samples.
-func decodeBytes(t *testing.T, data []byte) [][2]float64 {
-	t.Helper()
+func decodeBytes(tb testing.TB, data []byte) [][2]float64 {
+	tb.Helper()
 
-	decoder, err := mp3.OpenStream(t.Context(), bytes.NewReader(data))
-	require.NoError(t, err)
+	decoder, err := mp3.OpenStream(tb.Context(), bytes.NewReader(data))
+	require.NoError(tb, err)
 
-	return readAll(t, decoder, 1000)
+	return readAll(tb, decoder, 1000)
 }

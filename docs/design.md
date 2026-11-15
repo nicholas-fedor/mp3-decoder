@@ -99,7 +99,7 @@ So it accepts these, which a stricter reading would reject:
 
 ### Finding Frames
 
-`frame.Find` takes a frame only when the header after it belongs to the same stream. A search never accepts a frame on its own header alone.
+`frame.Find` takes a frame only when the header after it belongs to the same stream. A search never accepts a frame on its own header alone. Once the stream has ended, a header whose frame would reach past its end can never be confirmed, so the decoder's search moves past it to the frames after it.
 
 | A stream keeps | A stream may change |
 | --- | --- |
@@ -391,6 +391,8 @@ Two further checks bind the window and the matrixing together:
 ### Opening a Stream
 
 `mp3.OpenStream` moves past the ID3v2, ID3v1 and APEv2 tags at the start of a stream, then searches for the first frame that the header after it confirms, as [Finding Frames](#finding-frames) describes. That frame's header fixes what the rest of the stream must keep. A Xing or Info tag frame that opens the stream holds no audio, so it is skipped, as mpg123 and FFmpeg skip it.
+
+A stream may be opened at any byte, as on joining a radio stream. Decoding starts at the first confirmed frame, and every frame from there gives its samples. The frames whose main data began before the join give silence, as [Missing Main Data](#missing-main-data) describes. A frame reaches back at most 511 bytes in MPEG-1 and 255 at the lower sampling frequencies, so only the first few frames can. The filterbanks then take up to two granules to hold only what came after the silence. From there the samples match a decode of the whole stream exactly. A first frame needs the header after it to confirm it, and a free-format one needs two, so a stream opened within its last frame or two finds no frame.
 
 ### Frame Decoding
 

@@ -120,3 +120,43 @@ func decodeAll(ctx context.Context, data []byte) ([][2]float64, error) {
 		}
 	}
 }
+
+// FuzzJoin opens a fixture at any byte, as on joining a radio stream, and checks that the samples
+// soon match the end of the whole decode.
+//
+// The fuzzer picks the fixture and the cut. The seed corpus cuts each fixture inside its first
+// frame and partway through.
+func FuzzJoin(f *testing.F) {
+	type fixture struct {
+		data   []byte
+		starts []int
+		want   [][2]float64
+		end    int
+	}
+
+	names := []string{"mpeg1-joint.mp3", "mpeg1-mono.mp3", "protected.mp3", "mpeg2.mp3", "mpeg25.mp3", "free.mp3"}
+	fixtures := make([]fixture, 0, len(names))
+
+	for _, name := range names {
+		data, starts := frameStarts(f, name)
+
+		// A first frame needs the header after it to confirm it, and a free-format one needs two.
+		last := len(starts) - 2
+		if head, _ := frame.Parse(data[starts[0]:]); head.Free {
+			last--
+		}
+
+		fixtures = append(fixtures, fixture{data: data, starts: starts, want: decodeBytes(f, data), end: starts[last]})
+	}
+
+	for pick := range fixtures {
+		f.Add(uint8(pick), uint16(1))
+		f.Add(uint8(pick), uint16(fixtures[pick].end/2))
+	}
+
+	f.Fuzz(func(t *testing.T, pick uint8, at uint16) {
+		chosen := fixtures[int(pick)%len(fixtures)]
+
+		checkJoin(t, chosen.data, chosen.starts, chosen.want, 1+int(at)%(chosen.end-1))
+	})
+}

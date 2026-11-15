@@ -131,8 +131,8 @@ func decodeFile(t *testing.T, name string) [][2]float64 {
 }
 
 // readAll reads a decoder to its end, asking for a count of samples each time.
-func readAll(t *testing.T, decoder *mp3.Decoder, size int) [][2]float64 {
-	t.Helper()
+func readAll(tb testing.TB, decoder *mp3.Decoder, size int) [][2]float64 {
+	tb.Helper()
 
 	var out [][2]float64
 
@@ -146,8 +146,8 @@ func readAll(t *testing.T, decoder *mp3.Decoder, size int) [][2]float64 {
 			return out
 		}
 
-		require.NoError(t, err)
-		require.Positive(t, read)
+		require.NoError(tb, err)
+		require.Positive(tb, read)
 	}
 }
 

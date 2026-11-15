@@ -106,6 +106,9 @@ func (d *Decoder) resync() (frame.Header, error) {
 // scan searches the buffered bytes for a frame that the header after it confirms and stops at it,
 // or else moves past the bytes searched and reads more.
 //
+// The search stops early at a header whose frame the bytes end before confirming. When the stream
+// has ended, no more bytes can confirm it, so the search moves past it.
+//
 // Returns:
 //   - frame.Header: the frame's header, with the bitrate a free-format frame's spacing gives.
 //   - bool: whether a frame was found.
@@ -117,6 +120,10 @@ func (d *Decoder) scan() (frame.Header, bool, error) {
 	switch {
 	case ok:
 		return head, true, nil
+	case d.source.ended && len(d.source.bytes()) >= frame.HeaderSize:
+		d.source.consume(1)
+
+		return frame.Header{}, false, nil
 	case d.source.ended:
 		return frame.Header{}, false, io.EOF
 	default:
