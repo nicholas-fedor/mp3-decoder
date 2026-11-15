@@ -5,6 +5,7 @@ package mp3
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"slices"
 	"testing"
@@ -48,4 +49,21 @@ func TestScanPastUnconfirmable(t *testing.T) {
 			assert.Len(t, got, tt.want*frame.MaxSamples)
 		})
 	}
+}
+
+// TestCountCanceled checks that a canceled walk over a stream's frames stops with the context's
+// error.
+func TestCountCanceled(t *testing.T) {
+	t.Parallel()
+
+	walker := scanner{source: source{reader: bytes.NewReader(frames(stereoHead, 3))}}
+
+	_, _, err := walker.open(t.Context())
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err = walker.count(ctx)
+	require.ErrorIs(t, err, context.Canceled)
 }

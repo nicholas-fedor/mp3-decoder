@@ -58,6 +58,7 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `mp3`: the Info frame skipped at the start of a stream | mpg123, src/libmpg123/parse.c (check_lame_tag). FFmpeg, libavformat/mp3dec.c (mp3_parse_vbr_tags) |
 | `mp3`: tags between frames stepped over, and a resync past other bytes that empties the bit reservoir | mpg123, src/libmpg123/parse.c (wetwork) |
 | `mp3`: the stream ending where frames of another version, layer or sampling frequency start | mpg123, src/libmpg123/parse.c (read_frame with MPG123_NO_FRANKENSTEIN) |
+| `mp3`: the length from a tag frame whose byte count matches the audio, otherwise from a walk over the frames | FFmpeg, libavformat/mp3dec.c (mp3_parse_vbr_tags), which keeps the frame count unless the file exceeds the byte count by more than a sixteenth |
 | `mp3`: gapless playback, leaving out the encoder delay, the padding and the 529-sample decoder delay | FFmpeg, libavformat/mp3dec.c (mp3_parse_vbr_tags). mpg123, src/libmpg123/frame.c (INT123_frame_gapless_init) and src/libmpg123/frame.h (lastframe). LAME technical FAQ |
 | `trig`: π and cosines | Machin's formula and the Taylor series of the cosine |
 

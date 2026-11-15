@@ -77,3 +77,14 @@ func (p encoderPadding) keep(at int64, count int) (from, to int) {
 
 	return from, to
 }
+
+// kept returns how many samples of a stream are not padding.
+//
+// Parameters:
+//   - total: the number of samples the stream's frames hold.
+//
+// Returns:
+//   - int64: the number of samples not left out.
+func (p encoderPadding) kept(total int64) int64 {
+	return max(min(p.discard, total)-p.skip, 0) + max(total-p.resume, 0)
+}

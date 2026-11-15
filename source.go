@@ -17,6 +17,8 @@ type source struct {
 	buffer []byte
 	// at is the first unused byte in buffer.
 	at int
+	// passed counts the bytes of the stream moved past.
+	passed int64
 	// ended reports whether the reader has returned io.EOF.
 	ended bool
 }
@@ -38,6 +40,7 @@ func (s *source) bytes() []byte {
 //   - count: the bytes to move past, at most those buffered.
 func (s *source) consume(count int) {
 	s.at += count
+	s.passed += int64(count)
 }
 
 // discard moves past a count of bytes, reading past the buffered ones when it must.
@@ -55,7 +58,9 @@ func (s *source) discard(count int) error {
 		return nil
 	}
 
-	_, err := io.CopyN(io.Discard, s.reader, int64(count-buffered))
+	copied, err := io.CopyN(io.Discard, s.reader, int64(count-buffered))
+
+	s.passed += copied
 
 	switch {
 	case errors.Is(err, io.EOF):

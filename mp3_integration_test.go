@@ -20,6 +20,7 @@ import (
 	"github.com/nicholas-fedor/mp3-decoder/container"
 	"github.com/nicholas-fedor/mp3-decoder/frame"
 	"github.com/nicholas-fedor/mp3-decoder/internal/conformance"
+	"github.com/nicholas-fedor/mp3-decoder/internal/mp3test"
 )
 
 // TestReferences decodes each MPEG-1 fixture without its tag frame and checks it against the
@@ -105,6 +106,48 @@ func TestGapless(t *testing.T) {
 			require.Len(t, got, want)
 			assert.True(t, slices.Equal(whole[from:to], got), "the samples kept")
 		})
+	}
+}
+
+// TestLen checks that each fixture opened as a file knows its length, and that the length is the
+// number of samples it decodes to.
+//
+// Each fixture is opened alone, wrapped in tags at both ends, and joined to a copy of itself,
+// whose tag frame's byte count then no longer matches, so a walk counts the frames.
+func TestLen(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"mpeg1-joint.mp3", "mpeg1-mono.mp3", "protected.mp3", "free.mp3", "mpeg2.mp3", "mpeg25.mp3"} {
+		data, err := os.ReadFile("testdata/" + name)
+		require.NoError(t, err)
+
+		streams := map[string][]byte{
+			"alone": data,
+			"wrapped in tags": slices.Concat(
+				mp3test.ID3v2{Body: 300}.Bytes(), data, mp3test.APE{Items: 40, Header: true}.Bytes(), mp3test.Lyrics3(20),
+				mp3test.ID3v1(),
+			),
+			"joined to a copy": slices.Concat(data, data),
+		}
+
+		for kind, stream := range streams {
+			t.Run(name+" "+kind, func(t *testing.T) {
+				t.Parallel()
+
+				decoder, err := mp3.Open(t.Context(), bytes.NewReader(stream))
+				require.NoError(t, err)
+
+				length, known := decoder.Len()
+				require.True(t, known)
+
+				got := readAll(t, decoder, 1000)
+				assert.Equal(t, int64(len(got)), length)
+
+				if kind != "joined to a copy" {
+					assert.True(t, slices.Equal(decodeBytes(t, data), got), "the samples differ from the stream's")
+				}
+			})
+		}
 	}
 }
 

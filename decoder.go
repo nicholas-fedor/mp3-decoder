@@ -18,21 +18,26 @@ import (
 type Decoder struct {
 	// pending holds the samples of pcm that Read has not handed out.
 	pending [][2]float64
-	// source buffers the stream.
-	source source
+	// scanner finds the stream's frames.
+	scanner scanner
 	// layer3 decodes the frames.
 	layer3 layer3.Decoder
 	// pcm holds the samples of the frame decoded last.
 	pcm [frame.MaxSamples][2]float64
 	// cut holds a last frame that the stream ends inside, with zeros for the bytes it lacks.
 	cut [frame.MaxSize]byte
-	// first is the header of the stream's first frame.
-	first frame.Header
 	// padding holds the samples the encoder added, which are left out.
 	padding encoderPadding
 	// decoded counts the samples of the frames decoded, those left out among them.
 	decoded int64
+	// length is the number of samples the stream decodes to, when known.
+	length int64
+	// known reports whether length is known.
+	known bool
 }
+
+// tailSize is the most bytes at the end of a file searched for the tags after its audio.
+const tailSize = 64 << 10
 
 // Errors from opening a stream.
 var (
@@ -41,6 +46,64 @@ var (
 	// ErrLayer is returned for a stream of Layer I or Layer II frames.
 	ErrLayer = errors.New("mp3: only Layer III streams are decoded")
 )
+
+// Open opens a file for decoding from its start, and finds the number of samples it decodes to.
+//
+// It finds the audio as [OpenStream] does, and decodes only the bytes before the ID3v1, APEv2 and
+// Lyrics3 tags at the end. When the stream's tag frame counts its frames and its bytes, and the
+// byte count matches the audio, the frame count gives the length. Otherwise a walk over the frame
+// headers counts the frames, which reads the whole file. The decoder does not close src.
+//
+// Parameters:
+//   - ctx: cancels the search for the first frame and the walk.
+//   - src: the file.
+//
+// Returns:
+//   - *Decoder: the decoder, at the first frame.
+//   - error: [ErrNoFrames], [ErrLayer], a read or seek error, or the context's error.
+func Open(ctx context.Context, src io.ReadSeeker) (*Decoder, error) {
+	end, err := audioEnd(src)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = src.Seek(0, io.SeekStart)
+	if err != nil {
+		return nil, fmt.Errorf("seek stream: %w", err)
+	}
+
+	var walker scanner
+
+	walker.source.reader = io.LimitReader(src, end)
+
+	info, tagged, err := walker.open(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	total := info.Frames * int64(walker.first.Samples())
+
+	if !tagged || info.Frames == 0 || info.Bytes != end-walker.source.passed+int64(walker.first.Size()) {
+		total, err = walker.count(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	_, err = src.Seek(0, io.SeekStart)
+	if err != nil {
+		return nil, fmt.Errorf("seek stream: %w", err)
+	}
+
+	decoder, err := OpenStream(ctx, io.LimitReader(src, end))
+	if err != nil {
+		return nil, err
+	}
+
+	decoder.length, decoder.known = decoder.padding.kept(total), true
+
+	return decoder, nil
+}
 
 // OpenStream opens a stream for decoding from its start.
 //
@@ -59,33 +122,34 @@ var (
 func OpenStream(ctx context.Context, src io.Reader) (*Decoder, error) {
 	decoder := new(Decoder)
 
-	decoder.source.reader = src
+	decoder.scanner.source.reader = src
 
-	for stepped := true; stepped; {
-		var err error
-
-		stepped, err = decoder.skipTag()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	err := decoder.findFirst(ctx)
+	info, tagged, err := decoder.scanner.open(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if decoder.first.Layer != frame.Layer3 {
+	if decoder.scanner.first.Layer != frame.Layer3 {
 		return nil, ErrLayer
 	}
 
-	// The header that confirmed the first frame follows it, so the whole frame is buffered.
-	if info, ok := container.ParseInfo(decoder.first, decoder.source.bytes()[:decoder.first.Size()]); ok {
-		decoder.padding = paddingOf(info, decoder.first)
-		decoder.source.consume(decoder.first.Size())
+	if tagged {
+		decoder.padding = paddingOf(info, decoder.scanner.first)
 	}
 
 	return decoder, nil
+}
+
+// Len returns the number of samples the stream decodes to.
+//
+// Only [Open] finds it. It counts every frame, so a frame that fails to decode makes the stream
+// give fewer samples.
+//
+// Returns:
+//   - int64: the number of samples, from the first kept.
+//   - bool: whether the number is known.
+func (d *Decoder) Len() (int64, bool) {
+	return d.length, d.known
 }
 
 // Read decodes the next samples into dst.
@@ -141,37 +205,24 @@ func (d *Decoder) Read(dst [][2]float64) (int, error) {
 // Returns:
 //   - error: [io.EOF] at the end of the stream, or a read or decoding error.
 func (d *Decoder) decodeFrame() error {
-	head, err := d.nextFrame()
+	head, data, resynced, err := d.scanner.frame()
 	if err != nil {
 		return err
 	}
 
-	if head.Free {
-		head.Bitrate = d.first.Bitrate
+	if resynced {
+		d.layer3.Resync()
 	}
 
-	size := head.Size()
-
-	err = d.source.ensure(size)
-	if err != nil {
-		return err
-	}
-
-	data := d.source.bytes()
-	held := min(len(data), size)
-
-	switch {
-	case held < head.DataAt():
-		return io.EOF
-	case held < size:
+	if len(data) < head.Size() {
 		// The stream ends inside the frame. Its main data may still lie in the bytes it holds.
-		data = d.cut[:size]
-		clear(data[copy(data, d.source.bytes()):])
-	default:
+		cut := d.cut[:head.Size()]
+		clear(cut[copy(cut, data):])
+
+		data = cut
 	}
 
-	err = d.layer3.Decode(d.pcm[:], head, data[:size])
-	d.source.consume(held)
+	err = d.layer3.Decode(d.pcm[:], head, data)
 
 	at := d.decoded
 
@@ -186,4 +237,31 @@ func (d *Decoder) decodeFrame() error {
 	d.pending = d.pcm[from:to]
 
 	return nil
+}
+
+// audioEnd returns where the audio of a file ends, before the tags after it.
+//
+// Parameters:
+//   - src: the file.
+//
+// Returns:
+//   - int64: the size of the file less that of the tags at its end.
+//   - error: a read or seek error.
+func audioEnd(src io.ReadSeeker) (int64, error) {
+	size, err := src.Seek(0, io.SeekEnd)
+	if err != nil {
+		return 0, fmt.Errorf("seek stream: %w", err)
+	}
+
+	_, err = src.Seek(size-min(size, tailSize), io.SeekStart)
+	if err != nil {
+		return 0, fmt.Errorf("seek stream: %w", err)
+	}
+
+	tail, err := io.ReadAll(src)
+	if err != nil {
+		return 0, fmt.Errorf("read stream: %w", err)
+	}
+
+	return size - int64(container.TrailerSize(tail)), nil
 }
