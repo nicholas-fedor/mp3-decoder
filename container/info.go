@@ -125,7 +125,7 @@ func (i Info) OffsetAt(fraction float64, size int64) (int64, bool) {
 		return 0, false
 	}
 
-	pct := min(max(fraction*tocSize, 0), tocTop)
+	pct := min(max(float64(fraction*tocSize), 0), tocTop)
 	whole := int(pct)
 
 	from, to := float64(i.TOC[whole]), float64(tocScale)
@@ -133,9 +133,10 @@ func (i Info) OffsetAt(fraction float64, size int64) (int64, bool) {
 		to = float64(i.TOC[whole+1])
 	}
 
-	share := from + (to-from)*(pct-float64(whole))
+	share := from + float64((to-from)*(pct-float64(whole)))
+	offset := float64(share / tocScale * float64(size))
 
-	return int64(share / tocScale * float64(size)), true
+	return int64(offset), true
 }
 
 // Samples returns the number of samples per channel the stream decodes to.

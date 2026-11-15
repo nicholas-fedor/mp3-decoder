@@ -10,6 +10,7 @@ The decoder is measured against the MPEG audio conformance streams that ISO publ
 - [Measurement](#measurement)
   - [Full Accuracy](#full-accuracy)
   - [Alignment](#alignment)
+  - [Exact Output](#exact-output)
 - [Results](#results)
 - [Census](#census)
 
@@ -47,12 +48,18 @@ Most references match the decoded output from its first sample, channel for chan
 | `l3_10204` | The stream starts midway, and the main data of its first 2 frames lies before its start. The decoder gives those frames as silence, while the reference leaves them out, so it starts at decoded sample 2304 |
 | `l3_10501_*` | Each stream carries one or two channels of a multichannel program, and each reference holds one channel, named `f` for a front channel and `b` for a back channel. The left channel of `l3_10501_b01+b02` matches `b00` and its right channel `b01`. `l3_10501_b01_b02` is the same stream, `l3_10501_f00` is `l3_10107`, and `l3_10501_f01+f02` is `l3_10207` |
 
+### Exact Output
+
+The test also hashes the samples it decodes from each stream, and the results record one SHA-256 hash of those hashes, stream by stream. Every machine must decode the same bits, so the hash checks the machines that fuse multiply-adds, which `task test:fma` tests on.
+
 ## Results
 
 The conformance test records these results and the census below. Run it with `-update` and `MP3_DECODER_CONFORMANCE` set to rewrite them, and without `-update` it fails when any result changes.
 
 <!-- results start -->
 40 of 40 streams decode at full accuracy.
+
+The decoded samples of all 40 streams hash to `d8791095e1ecc0838b537aa9bfad0082d610f5d42787f4ef455cc4c44cd782ea`.
 
 | Stream | Reference | Channel | RMS | Largest | Result |
 | --- | --- | --- | --- | --- | --- |

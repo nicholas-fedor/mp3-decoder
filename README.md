@@ -49,7 +49,7 @@ Samples come as left and right pairs, unclipped, with full scale at 1.
 
 ## Testing
 
-Each package has white-box unit tests, a black-box integration test that uses only its exported API, examples and fuzz targets. The internal package [mp3test](internal/mp3test) builds bitstreams for tests. It encodes from its own field definitions, so the parsers are not checked against themselves. The [testdata](testdata) directory holds streams that LAME encoded and the samples mpg123 and ffmpeg decode from them, which its `generate.sh` script writes and the tests of several packages read. The internal package [conformance](internal/conformance) measures the decoder against ISO's conformance streams, which `task test` fetches into a cache first.
+Each package has white-box unit tests, a black-box integration test that uses only its exported API, examples and fuzz targets. The internal package [mp3test](internal/mp3test) builds bitstreams for tests. It encodes from its own field definitions, so the parsers are not checked against themselves. The [testdata](testdata) directory holds streams that LAME encoded and the samples mpg123 and ffmpeg decode from them, which its `generate.sh` script writes and the tests of several packages read. Its `golden.txt` records the hash of the samples each stream decodes to, which must be the same on every machine. The internal package [conformance](internal/conformance) measures the decoder against ISO's conformance streams, which `task test` fetches into a cache first.
 
 ## Documentation
 

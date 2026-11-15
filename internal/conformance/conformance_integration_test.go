@@ -5,6 +5,7 @@ package conformance_test
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"flag"
 	"fmt"
@@ -40,6 +41,8 @@ type outcome struct {
 	refusals []error
 	// failed counts the frames that failed to decode.
 	failed int
+	// digest is the hash of the decoded samples.
+	digest [sha256.Size]byte
 }
 
 // region is a part of the document that the test writes, between two markers.
@@ -156,7 +159,7 @@ func measure(t *testing.T, dir string, stream conformance.Stream) outcome {
 
 	found := outcome{
 		opening: nil, failure: nil, features: survey(data), stream: stream, differences: make([][]conformance.Difference, len(stream.References)),
-		refusals: make([]error, len(stream.References)), failed: 0,
+		refusals: make([]error, len(stream.References)), failed: 0, digest: [sha256.Size]byte{},
 	}
 
 	var decoded [][2]float64
@@ -183,6 +186,8 @@ func measure(t *testing.T, dir string, stream conformance.Stream) outcome {
 		}
 	}
 
+	found.digest = conformance.Digest(decoded)
+
 	for at, ref := range stream.References {
 		file, err := os.ReadFile(ref.Path(dir))
 		require.NoError(t, err)
@@ -196,17 +201,20 @@ func measure(t *testing.T, dir string, stream conformance.Stream) outcome {
 	return found
 }
 
-// render returns the results as Markdown: how many streams conform, then a row for each channel of
-// each reference.
+// render returns the results as Markdown: how many streams conform, one hash of every stream's
+// decoded samples, then a row for each channel of each reference.
 func render(outcomes []outcome) string {
 	var rows strings.Builder
 
 	conforming := 0
+	digests := sha256.New()
 
 	for _, found := range outcomes {
 		if conforms(found) {
 			conforming++
 		}
+
+		digests.Write(found.digest[:])
 
 		for at, ref := range found.stream.References {
 			name := ref.Name
@@ -237,6 +245,7 @@ func render(outcomes []outcome) string {
 	}
 
 	return fmt.Sprintf("%d of %d streams decode at full accuracy.\n\n", conforming, len(outcomes)) +
+		fmt.Sprintf("The decoded samples of all %d streams hash to `%x`.\n\n", len(outcomes), digests.Sum(nil)) +
 		"| Stream | Reference | Channel | RMS | Largest | Result |\n| --- | --- | --- | --- | --- | --- |\n" +
 		rows.String()
 }
