@@ -23,6 +23,7 @@ This document explains how the decoder is built and why, part by part. Each sect
   - [Scalefactors](#scalefactors)
     - [Storage Order](#storage-order)
     - [scfsi After Short Blocks](#scfsi-after-short-blocks)
+    - [Lower Sampling Frequencies](#lower-sampling-frequencies)
   - [Huffman Decoding](#huffman-decoding)
     - [Code Tables](#code-tables)
     - [Lookup Tables](#lookup-tables)
@@ -169,6 +170,12 @@ When the reservoir holds fewer bytes than main_data_begin, as at the start of a 
 
 A stream should never mark groups when either granule of the channel has short blocks. One that does reuses the values sent in the same places, as FFmpeg and mpg123 both read it.
 
+#### Lower Sampling Frequencies
+
+MPEG-2 and MPEG-2.5 frames send their scalefactors in four partitions. The 9-bit scalefac_compress gives each partition's width as the digits of a mixed-radix number, and picks one of six rows of partition counts, which FFmpeg and mpg123 hold alike. Values from 500 up also set preflag, which these frames do not send. The right channel of an intensity stereo frame halves scalefac_compress, whose lowest bit is the intensity scale, and takes rows of its own. `lsfSplit` holds each range's first value, radices and row, so one function reads every range.
+
+Mixed blocks at these frequencies send long bands 0 to 5, which end at line 36 like the 8 long bands of MPEG-1, and then short bands 3 to 11. `Scalefactors` keeps how far short values sit before their places in short blocks, 1 in MPEG-1 and 3 here.
+
 ### Huffman Decoding
 
 #### Code Tables
@@ -217,13 +224,13 @@ FFmpeg, mpg123 and Sieler and Sperschneider agree on every edge at all nine freq
 
 A granule without window switching sends its region boundaries as counts of long bands. A granule with window switching has implicit boundaries, set as FFmpeg sets them:
 
-| Granule | region1 starts after | region2 | Line at MPEG-1 |
-| --- | --- | --- | --- |
-| Without window switching | region0_count + 1 long bands | Starts region1_count + 1 long bands later | Sent |
-| Short or mixed blocks | Short bands 0 to 2 of each window | None | 36 |
-| Start or stop blocks | Long bands 0 to 7 | None | 36 |
+| Granule | region1 starts after | region2 | Line at MPEG-1 | Line at MPEG-2 and 11.025 or 12 kHz | Line at 8 kHz |
+| --- | --- | --- | --- | --- | --- |
+| Without window switching | region0_count + 1 long bands | Starts region1_count + 1 long bands later | Sent | Sent | Sent |
+| Short or mixed blocks | Short bands 0 to 2 of each window | None | 36 | 36 | 72 |
+| Start or stop blocks | Long bands 0 to 7 | None | 36 | 54 | 108 |
 
-For mixed blocks at the MPEG-2.5 frequencies, mpg123 starts region1 after long band 7 instead.
+The conformance stream `l3_25102` holds short blocks at 8 kHz and decodes at full accuracy from line 72. For mixed blocks at the MPEG-2.5 frequencies, mpg123 starts region1 after long band 7 instead, line 54 at 11.025 and 12 kHz. No conformance stream holds them.
 
 ### Requantization
 
@@ -339,7 +346,7 @@ The filterbank follows the published flow directly:
 
 1. Matrixing turns the subband samples S(k) into 64 values V(i), the sum over k of S(k) cos(π/64 (16+i)(2k+1)).
 2. V becomes the newest of the 16 vectors kept, and the oldest is dropped.
-3. Output sample j sums 16 window taps: for each of the 8 groups g, tap D(64g+j) times value j of vector 2g, and tap D(64g+32+j) times value 32+j of vector 2g+1, counting vectors from the newest.
+3. Output sample j sums 16 window taps. For each of the 8 groups g, it takes tap D(64g+j) times value j of vector 2g, and tap D(64g+32+j) times value 32+j of vector 2g+1, counting vectors from the newest.
 
 The 16 vectors live in a ring of 1024 values, so a call writes 64 values instead of shifting all 1024.
 

@@ -46,6 +46,7 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `synth`: matrixing, the V vector and the windowed sum | Sieler and Sperschneider, section 4.3.12.6 and Figure 2. dist10, lsf/decoder/decode.c (SubBandSynthesis) |
 | `synth`: synthesis window taps | Transcribed from FFmpeg, libavcodec/mpegaudiodsp_data.c (ff_mpa_enwindow), LGPL-2.1-or-later, with the symmetry of libavcodec/mpegaudiodsp_template.c (ff_mpa_synth_init). Every tap agrees with dist10, lsf/decoder/tables/dewindow |
 | `layer3`: silent frames where main data is missing, with the filterbanks still running | mpg123, src/libmpg123/layer3.c (III_get_side_info) |
+| `layer3`: lower-rate scalefactors, their partitions and preflag | FFmpeg, libavcodec/mpegaudiodec_template.c (lsf_sf_expand) and libavcodec/mpegaudiodec_common.c (ff_lsf_nsf_table). mpg123, src/libmpg123/layer3.c (III_get_scale_factors_2) |
 | `mp3`: a last frame that the stream ends inside, decoded from the bytes it holds | FFmpeg, libavcodec/mpegaudiodec_template.c (decode_frame) |
 | `layer3`, `hybrid`: the normal window for the lowest subbands of a start or stop block with the mixed flag | FFmpeg, libavcodec/mpegaudiodsp_template.c (ff_imdct36_blocks). mpg123, src/libmpg123/layer3.c (III_hybrid) |
 | `layer3`: filterbanks started afresh when the number of channels changes | The ISO/IEC 14496-26 references of `l3_10201` |

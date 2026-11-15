@@ -78,8 +78,8 @@ func (r Reference) Measure(decoded [][2]float64, wave Waveform) ([]Difference, e
 	return differences, nil
 }
 
-// Full reports whether the difference is within full accuracy: an RMS below 2^-15/√12 and no
-// difference above 2^-14.
+// Full reports whether the difference is within full accuracy, which needs an RMS below 2^-15/√12
+// and no difference above 2^-14.
 //
 // Returns:
 //   - bool: true within full accuracy.

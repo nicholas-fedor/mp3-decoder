@@ -273,7 +273,7 @@ func randomStereo(rng *rand.Rand, places *[granuleLines]lineBand) ([granuleLines
 // randomPositions returns random scalefactors that hold intensity positions from 0 to 8, so that
 // positions 7 and 8 code none.
 func randomPositions(rng *rand.Rand, mixed bool) *Scalefactors {
-	factors := &Scalefactors{mixed: mixed}
+	factors := &Scalefactors{shift: map[bool]int{true: mpeg1MixedShift}[mixed]}
 
 	for at := range shortSent {
 		factors.values[at] = uint8(rng.IntN(noPosition + 2))

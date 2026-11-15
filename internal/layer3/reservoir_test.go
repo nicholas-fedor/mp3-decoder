@@ -21,8 +21,9 @@ func TestReservoirSize(t *testing.T) {
 	}
 }
 
-// TestMainDataAllocs checks that handing out main data allocates nothing. It runs alone, since
-// AllocsPerRun refuses a parallel test.
+// TestMainDataAllocs checks that handing out main data allocates nothing.
+//
+// It runs alone, since AllocsPerRun refuses a parallel test.
 func TestMainDataAllocs(t *testing.T) {
 	var reservoir Reservoir
 

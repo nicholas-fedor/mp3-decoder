@@ -71,7 +71,7 @@ func Stereo(head frame.Header, left, right *[granuleLines]float64, info *Granule
 
 	joint := jointStereo{left: left, right: right, factors: factors, midSide: head.Extension&midSideStereo != 0}
 
-	if head.Extension&intensityStereo == 0 {
+	if !usesIntensity(head) {
 		joint.band(0, granuleLines, noPosition)
 
 		return
@@ -205,4 +205,16 @@ func silent(lines []float64) bool {
 	}
 
 	return true
+}
+
+// usesIntensity reports whether a frame codes intensity stereo, a joint stereo frame with the
+// intensity bit of its mode extension set.
+//
+// Parameters:
+//   - head: the frame's header.
+//
+// Returns:
+//   - bool: true for intensity stereo.
+func usesIntensity(head frame.Header) bool {
+	return head.Mode == frame.JointStereo && head.Extension&intensityStereo != 0
 }

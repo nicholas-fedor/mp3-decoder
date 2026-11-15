@@ -139,7 +139,7 @@ func (s *Spectrum) scale(dst *[granuleLines]float64, from, to, quarters int) {
 
 // gain returns 2^(e/4).
 //
-// The result is exact: 2^(r/4) for the remainder r times a power of two built from its bits. An
+// The result is exact. It is 2^(r/4) for the remainder r times a power of two built from its bits. An
 // exponent from the side information and scalefactors lies between -1298 and 45, so the power of
 // two lies between 2^-325 and 2^11 and is never subnormal.
 //

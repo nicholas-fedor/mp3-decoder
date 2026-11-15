@@ -42,9 +42,9 @@ type Decoder struct {
 // granulePCM is the number of PCM samples a granule gives for each channel.
 const granulePCM = hybrid.Samples * synth.Subbands
 
-// ErrVersion is returned for an MPEG-2 or MPEG-2.5 frame, whose scalefactors the decoder does not
-// read.
-var ErrVersion = errors.New("layer3: only MPEG-1 frames are decoded")
+// ErrIntensity is returned for an MPEG-2 or MPEG-2.5 frame that uses intensity stereo, which the
+// decoder does not restore at the lower sampling frequencies.
+var ErrIntensity = errors.New("layer3: intensity stereo below 32 kHz is not decoded")
 
 // Decode decodes the audio of one frame.
 //
@@ -62,10 +62,10 @@ var ErrVersion = errors.New("layer3: only MPEG-1 frames are decoded")
 //   - data: the frame's bytes from its header to its end.
 //
 // Returns:
-//   - error: [ErrVersion], [ErrShortFrame] or [ErrBlockType], and then dst is left as it was.
+//   - error: [ErrIntensity], [ErrShortFrame] or [ErrBlockType], and then dst is left as it was.
 func (d *Decoder) Decode(dst [][2]float64, head frame.Header, data []byte) error {
-	if head.Version != frame.MPEG1 {
-		return ErrVersion
+	if head.Version != frame.MPEG1 && usesIntensity(head) {
+		return ErrIntensity
 	}
 
 	err := d.side.Parse(head, data)
@@ -78,28 +78,14 @@ func (d *Decoder) Decode(dst [][2]float64, head frame.Header, data []byte) error
 	main, missing := d.reservoir.MainData(d.side.MainDataBegin, data[head.DataAt():])
 	start := 0
 
-	for gr := range mpeg1Granules {
-		for ch := range head.Channels() {
-			if missing > 0 {
-				d.lines[ch] = [granuleLines]float64{}
-			} else {
-				d.requantize(main, head, gr, ch, start)
-			}
+	granules := head.Samples() / granulePCM
 
-			start += d.side.Granules[gr][ch].Part23Length
-		}
-
-		if head.Mode != frame.Mono {
-			Stereo(head, &d.lines[0], &d.lines[1], &d.side.Granules[gr][1], &d.factors[1])
-		}
-
-		for ch := range head.Channels() {
-			d.synthesize(dst[gr*granulePCM:(gr+1)*granulePCM], head, gr, ch)
-		}
+	for gr := range granules {
+		start = d.granule(dst[gr*granulePCM:(gr+1)*granulePCM], main, head, gr, start, missing)
 	}
 
 	if head.Mode == frame.Mono {
-		for at := range mpeg1Granules * granulePCM {
+		for at := range granules * granulePCM {
 			dst[at][1] = dst[at][0]
 		}
 	}
@@ -123,6 +109,41 @@ func (d *Decoder) followChannels(head frame.Header) {
 	d.channels = head.Channels()
 }
 
+// granule decodes one granule of every channel into its PCM samples.
+//
+// Parameters:
+//   - dst: the granule's PCM samples.
+//   - main: the frame's main data.
+//   - head: the frame's header.
+//   - gr: the granule.
+//   - start: the position of the granule's first bit in main.
+//   - missing: how many bytes of the frame's main data the decoder lacks, which silence the
+//     granule when above 0.
+//
+// Returns:
+//   - int: the position of the next granule's first bit in main.
+func (d *Decoder) granule(dst [][2]float64, main []byte, head frame.Header, gr, start, missing int) int {
+	for ch := range head.Channels() {
+		if missing > 0 {
+			d.lines[ch] = [granuleLines]float64{}
+		} else {
+			d.requantize(main, head, gr, ch, start)
+		}
+
+		start += d.side.Granules[gr][ch].Part23Length
+	}
+
+	if head.Mode != frame.Mono {
+		Stereo(head, &d.lines[0], &d.lines[1], &d.side.Granules[gr][1], &d.factors[1])
+	}
+
+	for ch := range head.Channels() {
+		d.synthesize(dst, head, gr, ch)
+	}
+
+	return start
+}
+
 // requantize decodes one channel's granule into its spectral lines.
 //
 // Parameters:
@@ -135,7 +156,7 @@ func (d *Decoder) requantize(main []byte, head frame.Header, gr, ch, start int) 
 	info := &d.side.Granules[gr][ch]
 
 	d.stream.Reset(main, start)
-	d.factors[ch].ReadMPEG1(&d.stream, &d.side, gr, ch)
+	d.factors[ch].Read(&d.stream, head, &d.side, gr, ch)
 	d.spectrum.Read(&d.stream, head, info, start+info.Part23Length)
 	d.spectrum.Requantize(&d.lines[ch], info, &d.factors[ch])
 }

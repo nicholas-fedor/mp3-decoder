@@ -72,7 +72,9 @@ var update = flag.Bool("update", false, "rewrite the results and the census in d
 
 // TestConformance decodes every conformance stream in the cache that MP3_DECODER_CONFORMANCE names,
 // measures it against its references, takes a census of the features it uses, and checks both
-// against what docs/conformance.md records. With -update it records them there instead.
+// against what docs/conformance.md records.
+//
+// With -update it records them there instead.
 //
 // A file missing from the cache fails the test.
 func TestConformance(t *testing.T) {
@@ -225,7 +227,7 @@ func render(outcomes []outcome) string {
 				}
 
 				if found.failed > 0 {
-					result += fmt.Sprintf(", %d frames failed: %v", found.failed, found.failure)
+					result += ", " + failures(found)
 				}
 
 				fmt.Fprintf(&rows, "| %s | %s | %s | %.1e | %.1e | %s |\n", found.stream.Name, name,
@@ -244,16 +246,26 @@ func render(outcomes []outcome) string {
 func refusal(found outcome, at int) string {
 	switch {
 	case found.opening != nil:
-		return fmt.Sprintf("not opened: %v", found.opening)
+		return fmt.Sprintf("not opened, with the error %q", found.opening)
 	case found.failed > 0:
-		return fmt.Sprintf("not decoded, %d frames failed: %v", found.failed, found.failure)
+		return "not decoded, " + failures(found)
 	default:
-		return fmt.Sprintf("not measured: %v", found.refusals[at])
+		return fmt.Sprintf("not measured, with the error %q", found.refusals[at])
 	}
 }
 
-// conforms reports whether a stream decodes at full accuracy: every reference, or one of its
-// alternatives, matches on every channel.
+// failures words how many frames failed to decode, and the first one's error.
+func failures(found outcome) string {
+	frames := "frames"
+	if found.failed == 1 {
+		frames = "frame"
+	}
+
+	return fmt.Sprintf("%d %s failed, the first with the error %q", found.failed, frames, found.failure)
+}
+
+// conforms reports whether a stream decodes at full accuracy, with every reference, or one of
+// its alternatives, matching on every channel.
 func conforms(found outcome) bool {
 	matched := false
 

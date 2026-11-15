@@ -52,7 +52,7 @@ Most references match the decoded output from its first sample, channel for chan
 The conformance test records these results and the census below. Run it with `-update` and `MP3_DECODER_CONFORMANCE` set to rewrite them, and without `-update` it fails when any result changes.
 
 <!-- results start -->
-18 of 40 streams decode at full accuracy.
+29 of 40 streams decode at full accuracy.
 
 | Stream | Reference | Channel | RMS | Largest | Result |
 | --- | --- | --- | --- | --- | --- |
@@ -87,28 +87,31 @@ The conformance test records these results and the census below. Run it with `-u
 | l3_10501_f00 | l3_10501_f00 | left | 3.4e-08 | 6.0e-08 | full accuracy |
 | l3_10501_f01+f02 | l3_10501_f01 | left | 3.4e-08 | 2.9e-07 | full accuracy |
 | l3_10501_f01+f02 | l3_10501_f02 | right | 3.4e-08 | 2.0e-07 | full accuracy |
-| l3_20140 | l3_20140 | | | | not decoded, 476 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_20141 | l3_20141 | | | | not decoded, 476 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_20142 | l3_20142 | | | | not decoded, 476 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_20143 | l3_20143 | | | | not decoded, 212 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_20244 | l3_20244 | | | | not decoded, 386 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_20245 | l3_20245 | | | | not decoded, 822 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_20246 | l3_20246 | | | | not decoded, 250 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_20247 | l3_20247 | | | | not decoded, 386 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_20248 | l3_20248 | | | | not decoded, 386 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25101 | l3_25101 | | | | not decoded, 212 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25102 | l3_25102 | | | | not decoded, 136 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25103 | l3_25103 | | | | not decoded, 184 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25104 | l3_25104 | | | | not decoded, 152 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25201 | l3_25201 | | | | not decoded, 195 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25202 | l3_25202 | | | | not decoded, 195 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25203 | l3_25203 | | | | not decoded, 195 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25204 | l3_25204 | | | | not decoded, 102 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25205 | l3_25205 | | | | not decoded, 138 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25206 | l3_25206 | | | | not decoded, 144 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25207 | l3_25207 | | | | not decoded, 102 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25208 | l3_25208 | | | | not decoded, 140 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
-| l3_25209 | l3_25209 | | | | not decoded, 152 frames failed: decode frame: layer3: only MPEG-1 frames are decoded |
+| l3_20140 | l3_20140 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l3_20141 | l3_20141 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l3_20142 | l3_20142 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l3_20143 | l3_20143 | left | 3.4e-08 | 6.0e-08 | full accuracy |
+| l3_20244 | l3_20244 | | | | not decoded, 1 frame failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
+| l3_20245 | l3_20245 | | | | not decoded, 768 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
+| l3_20246 | l3_20246 | | | | not decoded, 212 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
+| l3_20247 | l3_20247 | | | | not decoded, 386 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
+| l3_20248 | l3_20248 | | | | not decoded, 385 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
+| l3_25101 | l3_25101 | left | 5.5e-08 | 2.7e-07 | full accuracy |
+| l3_25102 | l3_25102 | left | 6.1e-08 | 2.7e-07 | full accuracy |
+| l3_25103 | l3_25103 | left | 7.1e-08 | 4.0e-07 | full accuracy |
+| l3_25104 | l3_25104 | left | 6.7e-08 | 4.6e-07 | full accuracy |
+| l3_25201 | l3_25201 | left | 6.0e-08 | 2.8e-07 | full accuracy |
+| l3_25201 | l3_25201 | right | 6.0e-08 | 3.1e-07 | full accuracy |
+| l3_25202 | l3_25202 | left | 5.6e-08 | 2.2e-07 | full accuracy |
+| l3_25202 | l3_25202 | right | 0.0e+00 | 0.0e+00 | full accuracy |
+| l3_25203 | l3_25203 | left | 5.6e-08 | 2.4e-07 | full accuracy |
+| l3_25203 | l3_25203 | right | 5.4e-08 | 1.2e-07 | full accuracy |
+| l3_25204 | l3_25204 | | | | not decoded, 102 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
+| l3_25205 | l3_25205 | | | | not decoded, 138 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
+| l3_25206 | l3_25206 | | | | not decoded, 144 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
+| l3_25207 | l3_25207 | | | | not decoded, 94 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
+| l3_25208 | l3_25208 | | | | not decoded, 130 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
+| l3_25209 | l3_25209 | | | | not decoded, 141 frames failed, the first with the error "decode frame: layer3: intensity stereo below 32 kHz is not decoded" |
 <!-- results end -->
 
 ## Census

@@ -11,9 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMeasure measures decoded output against references that start part way in and that take
-// the right channel, and checks the RMS and the largest difference of each channel. Decoded
-// samples past full scale match a reference clipped there.
+// TestMeasure measures decoded output against references that start part way in and that take the
+// right channel, and checks the RMS and the largest difference of each channel.
+//
+// Decoded samples past full scale match a reference clipped there.
 func TestMeasure(t *testing.T) {
 	t.Parallel()
 
@@ -106,8 +107,10 @@ func TestMeasureErrors(t *testing.T) {
 	}
 }
 
-// TestFull checks full accuracy at its bounds: an RMS just below 2^-15/√12, and a largest
-// difference of exactly 2^-14, pass, and anything past either fails.
+// TestFull checks full accuracy at its bounds.
+//
+// An RMS just below 2^-15/√12 and a largest difference of exactly 2^-14 pass, and anything past
+// either fails.
 func TestFull(t *testing.T) {
 	t.Parallel()
 

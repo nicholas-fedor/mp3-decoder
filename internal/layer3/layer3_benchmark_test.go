@@ -101,7 +101,7 @@ func BenchmarkSpectrum(b *testing.B) {
 					info := &f.side.Granules[gr][ch]
 
 					stream.Reset(f.main, start)
-					factors[ch].ReadMPEG1(&stream, &f.side, gr, ch)
+					factors[ch].Read(&stream, f.head, &f.side, gr, ch)
 					spectrum.Read(&stream, f.head, info, start+info.Part23Length)
 
 					start += info.Part23Length
@@ -153,7 +153,7 @@ func BenchmarkRequantize(b *testing.B) {
 				g.info = side.Granules[gr][ch]
 
 				stream.Reset(main, start)
-				factors[ch].ReadMPEG1(&stream, &side, gr, ch)
+				factors[ch].Read(&stream, head, &side, gr, ch)
 				g.spectrum.Read(&stream, head, &g.info, start+g.info.Part23Length)
 				g.factors = factors[ch]
 				granules = append(granules, g)
@@ -218,7 +218,7 @@ func BenchmarkStereo(b *testing.B) {
 				info := &side.Granules[gr][ch]
 
 				stream.Reset(main, start)
-				factors[ch].ReadMPEG1(&stream, &side, gr, ch)
+				factors[ch].Read(&stream, head, &side, gr, ch)
 				spectrum.Read(&stream, head, info, start+info.Part23Length)
 				spectrum.Requantize(&g.lines[ch], info, &factors[ch])
 

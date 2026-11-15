@@ -171,7 +171,7 @@ func TestSpectrumEncodedFiles(t *testing.T) {
 						end := start + info.Part23Length
 
 						stream.Reset(main, start)
-						factors[ch].ReadMPEG1(&stream, &side, gr, ch)
+						factors[ch].Read(&stream, head, &side, gr, ch)
 						spectrum.Read(&stream, head, info, end)
 
 						assert.GreaterOrEqual(t, spectrum.Decoded, 2*info.BigValues, "frame %d", at)

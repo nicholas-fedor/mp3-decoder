@@ -61,7 +61,7 @@ func TestStereoIntensityFrame(t *testing.T) {
 		info := &side.Granules[0][ch]
 
 		stream.Reset(writers[ch].Bytes(), 0)
-		factors[ch].ReadMPEG1(&stream, &side, 0, ch)
+		factors[ch].Read(&stream, head, &side, 0, ch)
 		spectrum.Read(&stream, head, info, writers[ch].Len())
 		spectrum.Requantize(&lines[ch], info, &factors[ch])
 	}
@@ -119,7 +119,7 @@ func TestStereoEncodedFiles(t *testing.T) {
 				info := &side.Granules[gr][ch]
 
 				stream.Reset(main, start)
-				factors[ch].ReadMPEG1(&stream, &side, gr, ch)
+				factors[ch].Read(&stream, head, &side, gr, ch)
 				spectrum.Read(&stream, head, info, start+info.Part23Length)
 				spectrum.Requantize(&lines[ch], info, &factors[ch])
 

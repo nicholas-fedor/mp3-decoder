@@ -12,7 +12,9 @@ import (
 
 // Waveform is a reference waveform, with samples between -1 and 1.
 type Waveform struct {
-	// Channels holds each channel's samples. Every channel has the same number of samples.
+	// Channels holds each channel's samples.
+	//
+	// Every channel has the same number of samples.
 	Channels [][]float64
 	// Rate is the sampling frequency in Hz.
 	Rate int

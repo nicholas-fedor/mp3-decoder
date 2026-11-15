@@ -172,7 +172,7 @@ func randomGranule(rng *rand.Rand, rate int, mixed, preflag bool) (*Spectrum, *S
 		spectrum.Values[line] = magnitude
 	}
 
-	factors := &Scalefactors{mixed: mixed, preflag: preflag}
+	factors := &Scalefactors{shift: map[bool]int{true: mpeg1MixedShift}[mixed], preflag: preflag}
 
 	for at := range shortSent {
 		factors.values[at] = uint8(rng.IntN(16))

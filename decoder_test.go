@@ -156,14 +156,28 @@ func TestReadEnds(t *testing.T) {
 		assert.Len(t, got, 2*frame.MaxSamples)
 	})
 
-	t.Run("frames of another version", func(t *testing.T) {
+	t.Run("MPEG-2 frames", func(t *testing.T) {
 		t.Parallel()
 
 		decoder, err := OpenStream(t.Context(), bytes.NewReader(frames(lsfHead, 3)))
 		require.NoError(t, err)
 
+		got, err := readSamples(decoder)
+		require.ErrorIs(t, err, io.EOF)
+		assert.Len(t, got, 3*frame.MaxSamples/2)
+	})
+
+	t.Run("MPEG-2 intensity stereo", func(t *testing.T) {
+		t.Parallel()
+
+		intensity := lsfHead
+		intensity.Mode, intensity.Extension = mp3test.JointStereo, 1
+
+		decoder, err := OpenStream(t.Context(), bytes.NewReader(frames(intensity, 3)))
+		require.NoError(t, err)
+
 		_, err = readSamples(decoder)
-		require.ErrorIs(t, err, layer3.ErrVersion)
+		require.ErrorIs(t, err, layer3.ErrIntensity)
 	})
 
 	for name, size := range map[string]int{"a source failing within a frame": 1000, "a source failing between frames": 834} {

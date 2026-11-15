@@ -43,7 +43,7 @@ func TestRunFails(t *testing.T) {
 }
 
 // TestRunReady checks that a complete cache, which MP3_DECODER_CONFORMANCE names, is ready without a
-// request: the URL leads nowhere.
+// request, since the URL leads nowhere.
 func TestRunReady(t *testing.T) {
 	t.Parallel()
 

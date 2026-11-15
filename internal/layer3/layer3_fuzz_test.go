@@ -153,8 +153,11 @@ func FuzzReservoir(f *testing.F) {
 // FuzzSpectrum decodes spectral values from any bits under any side information and checks that
 // whole pairs and quadruples come back, that every value past them is 0 and within the widest
 // table's range, and that decoding stops with room for another quadruple only at or just past the
-// end. It then requantizes them under scalefactors and gains drawn from the side information bytes, and checks
-// that each spectral value is finite and shares its quantized value's sign and whether it is 0.
+// end.
+//
+// It then requantizes them under scalefactors and gains drawn from the side information bytes, and
+// checks that each spectral value is finite and shares its quantized value's sign and whether it is
+// 0.
 //
 // A pair runs at most 47 bits past the end, a 19-bit code word with 13 linbits and a sign for each
 // value. The seed corpus holds ones under long, short and mixed blocks, and no bits.
@@ -216,7 +219,9 @@ func FuzzSpectrum(f *testing.F) {
 		info.GlobalGain = int(fields[0])
 		info.ScalefacScale = fields[1]%2 == 1
 		info.SubblockGain = [3]int{int(fields[2] % 8), int(fields[3] % 8), int(fields[4] % 8)}
-		factors.mixed = info.BlockType == ShortBlocks && info.MixedBlock
+		if info.BlockType == ShortBlocks && info.MixedBlock {
+			factors.shift = mpeg1MixedShift
+		}
 		factors.preflag = fields[5]%2 == 1
 
 		spectrum.Requantize(&lines, &info, &factors)
@@ -230,8 +235,9 @@ func FuzzSpectrum(f *testing.F) {
 }
 
 // FuzzStereo restores joint stereo lines drawn from any bytes under any MPEG-1 block, mode and
-// intensity positions, and checks every line against the formulas. It then reorders both channels
-// and checks that each holds the same lines as before.
+// intensity positions, and checks every line against the formulas.
+//
+// It then reorders both channels and checks that each holds the same lines as before.
 //
 // Each pair of bytes gives a line's left and right values between -1 and 1, and lines past the
 // bytes are 0. Positions run from 0 to 15, so most code none. The seed corpus holds a long block
@@ -262,7 +268,10 @@ func FuzzStereo(f *testing.F) {
 			Mode: frame.JointStereo, Extension: fields[2] % 4,
 		}
 
-		factors := Scalefactors{mixed: info.BlockType == ShortBlocks && info.MixedBlock}
+		factors := Scalefactors{}
+		if info.BlockType == ShortBlocks && info.MixedBlock {
+			factors.shift = mpeg1MixedShift
+		}
 		for at := range shortSent {
 			factors.values[at] = fields[3+at%(len(fields)-3)] % 16
 		}

@@ -10,11 +10,14 @@ type Window uint8
 
 // Block says which subbands of a granule hold long blocks, and the windows they take.
 type Block struct {
-	// Long is the number of subbands, from 0 to 32, that hold long blocks from the lowest up. The
-	// subbands above them hold short blocks.
+	// Long is the number of subbands, from 0 to 32, that hold long blocks from the lowest up.
+	//
+	// The subbands above them hold short blocks.
 	Long int
 	// Mixed is the number of subbands, from the lowest up, that hold the long part of a mixed
-	// block. Their long blocks take the normal window whatever Window says.
+	// block.
+	//
+	// Their long blocks take the normal window whatever Window says.
 	Mixed int
 	// Window is the window of the long blocks above the long part of a mixed block.
 	Window Window

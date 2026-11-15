@@ -4,6 +4,7 @@
 package layer3_test
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"testing"
 
@@ -25,6 +26,9 @@ type block struct {
 	// info is the kind's side information.
 	info layer3.GranuleInfo
 }
+
+// mpeg1Head is an MPEG-1 Layer III stereo header, which takes the MPEG-1 scalefactors.
+var mpeg1Head = frame.Header{SampleRate: 44100, Version: frame.MPEG1, Layer: frame.Layer3, Mode: frame.Stereo}
 
 // blocks lists every kind of block.
 var blocks = []block{
@@ -118,8 +122,8 @@ func TestReadMPEG1ScfsiAfterShortBlocks(t *testing.T) {
 	side.SCFSI[0] = [4]bool{true, true, true, true}
 
 	stream.Reset(w.Bytes(), 0)
-	factors.ReadMPEG1(&stream, &side, 0, 0)
-	factors.ReadMPEG1(&stream, &side, 1, 0)
+	factors.Read(&stream, mpeg1Head, &side, 0, 0)
+	factors.Read(&stream, mpeg1Head, &side, 1, 0)
 
 	assert.Equal(t, w.Len(), stream.Pos())
 
@@ -163,7 +167,7 @@ func TestReadMPEG1EncodedFiles(t *testing.T) {
 						info := side.Granules[gr][ch]
 
 						stream.Reset(main, start)
-						factors[ch].ReadMPEG1(&stream, &side, gr, ch)
+						factors[ch].Read(&stream, head, &side, gr, ch)
 
 						assert.Equal(t, part2Bits(info, side.SCFSI[ch], gr), stream.Pos()-start, "frame %d", at)
 						assert.LessOrEqual(t, stream.Pos()-start, info.Part23Length, "frame %d", at)
@@ -210,7 +214,7 @@ func roundTrip(t *testing.T, rng *rand.Rand, kinds [2]block, compress int, reuse
 	stream.Reset(w.Bytes(), 0)
 
 	for gr, kind := range kinds {
-		factors.ReadMPEG1(&stream, &side, gr, 0)
+		factors.Read(&stream, mpeg1Head, &side, gr, 0)
 		require.Equal(t, marks[gr], stream.Pos(), "%s granule %d bits", name, gr)
 
 		want := raw[gr]
@@ -299,5 +303,110 @@ func part2Bits(info layer3.GranuleInfo, scfsi [4]bool, gr int) int {
 		}
 
 		return bits
+	}
+}
+
+// TestReadLSFRoundTrip writes random lower-rate scalefactors of every kind of block at every
+// scalefac_compress and reads them back, for a channel of a frame without intensity stereo and for
+// both channels of a frame with it.
+//
+// Each granule must read as many bits as the builder wrote, and every band must hold its
+// scalefactor, with the bands no partition sends at 0.
+func TestReadLSFRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	rng := rand.New(rand.NewPCG(9, 10))
+	plain := frame.Header{SampleRate: 22050, Version: frame.MPEG2, Layer: frame.Layer3, Mode: frame.JointStereo}
+	intensity := plain
+	intensity.Extension = 1
+
+	cases := []struct {
+		name  string
+		head  frame.Header
+		ch    int
+		write func(w *mp3test.BitWriter, granule *mp3test.Granule, factors *mp3test.Scalefactors)
+	}{
+		{"right channel without intensity stereo", plain, 1, (*mp3test.BitWriter).LSFScalefactors},
+		{"left channel with intensity stereo", intensity, 0, (*mp3test.BitWriter).LSFScalefactors},
+		{"right channel with intensity stereo", intensity, 1, (*mp3test.BitWriter).IntensityScalefactors},
+	}
+
+	for _, tc := range cases {
+		for _, kind := range blocks {
+			for compress := range uint32(512) {
+				granule := kind.raw
+				granule.ScalefacCompress = compress
+
+				var (
+					w       mp3test.BitWriter
+					written mp3test.Scalefactors
+					side    layer3.SideInfo
+					stream  bits.Reader
+					factors layer3.Scalefactors
+				)
+
+				fill(rng, &written)
+				tc.write(&w, &granule, &written)
+
+				side.Granules[0][tc.ch] = kind.info
+				side.Granules[0][tc.ch].ScalefacCompress = int(compress)
+
+				stream.Reset(w.Bytes(), 0)
+				factors.Read(&stream, tc.head, &side, 0, tc.ch)
+
+				name := fmt.Sprintf("%s, %s at %d", tc.name, kind.name, compress)
+				require.Equal(t, w.Len(), stream.Pos(), name)
+				checkLSF(t, &factors, &written, kind.info, name)
+			}
+		}
+	}
+}
+
+// fill gives every scalefactor a random value of 5 bits, which the writer cuts to its width.
+func fill(rng *rand.Rand, factors *mp3test.Scalefactors) {
+	for band := range factors.Long {
+		factors.Long[band] = rng.Uint32N(32)
+	}
+
+	for band := range factors.Short {
+		for window := range factors.Short[band] {
+			factors.Short[band][window] = rng.Uint32N(32)
+		}
+	}
+}
+
+// checkLSF checks that read scalefactors hold the written ones in every band the block sends, and
+// 0 in the last band of each kind.
+func checkLSF(t *testing.T, got *layer3.Scalefactors, want *mp3test.Scalefactors, info layer3.GranuleInfo, name string) {
+	t.Helper()
+
+	longBands, shortFrom := len(want.Long), len(want.Short)
+
+	switch {
+	case info.BlockType == layer3.ShortBlocks && info.MixedBlock:
+		longBands, shortFrom = 6, 3
+	case info.BlockType == layer3.ShortBlocks:
+		longBands, shortFrom = 0, 0
+	default:
+	}
+
+	for band := range longBands {
+		require.Equal(t, int(want.Long[band]), got.Long(band), "%s: long band %d", name, band)
+	}
+
+	if longBands == len(want.Long) {
+		require.Zero(t, got.Long(longBands), "%s: long band 21", name)
+
+		return
+	}
+
+	for band := shortFrom; band < len(want.Short); band++ {
+		for window := range want.Short[band] {
+			require.Equal(t, int(want.Short[band][window]), got.Short(band, window), "%s: short band %d window %d", name, band, window)
+		}
+	}
+
+	for window := range 3 {
+		require.Zero(t, got.Short(len(want.Short), window), "%s: short band 12", name)
 	}
 }
