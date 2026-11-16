@@ -1,6 +1,8 @@
 module github.com/nicholas-fedor/mp3-decoder
 
-go 1.27.4
+go 1.27
+
+toolchain go1.27.4
 
 require github.com/stretchr/testify v1.12.1
 
