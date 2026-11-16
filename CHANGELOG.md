@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Require go 1.27 and set the toolchain separately by @nicholas-fedor in [#10](https://github.com/nicholas-fedor/mp3-decoder/pull/10)
 - Rework the README for users of the module by @nicholas-fedor in [#7](https://github.com/nicholas-fedor/mp3-decoder/pull/7)
 
 ## [0.1.0] - 2026-11-15
