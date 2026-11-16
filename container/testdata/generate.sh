@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) Nicholas Fedor 2026 <nick@nickfedor.com>
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: Apache-2.0
 #
 # Regenerates the container fixtures in this directory.
 # Requires ffmpeg and lame. Every fixture encodes a 440 Hz sine of exactly 10000 samples.

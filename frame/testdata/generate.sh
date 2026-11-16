@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) Nicholas Fedor 2026 <nick@nickfedor.com>
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: Apache-2.0
 #
 # Regenerates the frame fixtures in this directory.
 # Requires ffmpeg and lame.

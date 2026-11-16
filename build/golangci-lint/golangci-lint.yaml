@@ -1099,7 +1099,7 @@ linters:
       # Default: ""
       template: |-
         Copyright (c) {{ AUTHOR }} {{ YEAR }} <{{ EMAIL }}>
-        SPDX-License-Identifier: AGPL-3.0-or-later
+        SPDX-License-Identifier: Apache-2.0
 
       # As alternative of directive 'template', you may put the path to file with the template source.
       # Useful if you need to load the template from a specific file.

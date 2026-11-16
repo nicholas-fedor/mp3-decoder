@@ -7,7 +7,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/nicholas-fedor/mp3-decoder.svg)](https://pkg.go.dev/github.com/nicholas-fedor/mp3-decoder)
 [![Coverage](https://codecov.io/gh/nicholas-fedor/mp3-decoder/graph/badge.svg)](https://codecov.io/gh/nicholas-fedor/mp3-decoder)
-[![License](https://img.shields.io/github/license/nicholas-fedor/mp3-decoder)](LICENSE.md)
+[![License](https://img.shields.io/github/license/nicholas-fedor/mp3-decoder)](LICENSE)
 
 A pure-Go decoder for MPEG-1, MPEG-2 and MPEG-2.5 audio in Layers I, II and III.
 
@@ -182,4 +182,4 @@ Releases follow [Semantic Versioning](https://semver.org).
 
 ## License
 
-mp3-decoder is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE.md).
+mp3-decoder is licensed under the [Apache License 2.0](LICENSE).
