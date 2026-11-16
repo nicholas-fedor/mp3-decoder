@@ -21,7 +21,7 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `container`: tags read only in Layer III frames | mpg123, src/libmpg123/parse.c (check_lame_tag, called only for Layer III). FFmpeg, libavformat/mp3dec.c (mp3_parse_vbr_tags) |
 | `container`: VBRI tag | FFmpeg, libavformat/mp3dec.c (mp3_parse_vbri_tag) |
 | `container`: seek table offsets | LAME info tag |
-| `huffman/codebook`: Huffman code tables | Transcribed from FFmpeg, libavcodec/mpegaudiodec_common.c (mpa_hufflens, mpa_huffsymbols, mpa_quad_codes, mpa_quad_bits and ff_mpa_huff_data), LGPL-2.1-or-later. Every code word and length agrees with the decode trees of dist10, lsf/decoder/tables/huffdec. The 1288 entries that parse from Sieler and Sperschneider, Tables 24 to 41, agree too |
+| `huffman/codebook`: Huffman code tables | The ISO code words, in this decoder's layout. Every code word and length agrees with the decode trees of PDMP3, pdmp3.c (g_huffman_table), and dist10, lsf/decoder/tables/huffdec. The 1288 entries that parse from Sieler and Sperschneider, Tables 24 to 41, agree too |
 | `huffman`: decoding order of code words, linbits and signs | Sieler and Sperschneider, Table 6 (huffmancodebits) |
 | `huffman`: tables 4 and 14 decoding as table 0 | FFmpeg, libavcodec/mpegaudiodec_common.c (ff_mpa_huff_data). mpg123, src/libmpg123/huffman.h (ht) |
 | `huffman`: big_values pairs stopping at the end of the granule's bits, and a count1 quadruple past it left out | FFmpeg, libavcodec/mpegaudiodec_template.c (huffman_decode) |
@@ -48,7 +48,7 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `hybrid`: 4 long subbands in mixed blocks at 8 kHz | Sieler and Sperschneider, section 4.3.12.1 (sb_amount) |
 | `synth`: matrixing, the V vector and the windowed sum | Sieler and Sperschneider, section 4.3.12.6 and Figure 2. dist10, lsf/decoder/decode.c (SubBandSynthesis) |
 | `synth`: matrixing through a 32-point DCT, by Byeong Gi Lee's algorithm | B. G. Lee 1984, in the form of Project Nayuki's FastDctLee (MIT). The folding of V onto the DCT follows from the cosine's symmetries |
-| `synth`: synthesis window taps | Transcribed from FFmpeg, libavcodec/mpegaudiodsp_data.c (ff_mpa_enwindow), LGPL-2.1-or-later, with the symmetry of libavcodec/mpegaudiodsp_template.c (ff_mpa_synth_init). Every tap agrees with dist10, lsf/decoder/tables/dewindow |
+| `synth`: synthesis window taps | Transcribed from PDMP3, pdmp3.c (g_synth_dtbl), public domain, and rounded to multiples of 2^-16. Every tap agrees with dist10, lsf/decoder/tables/dewindow |
 | `layer3`: silent frames where main data is missing, with the filterbanks still running | mpg123, src/libmpg123/layer3.c (III_get_side_info) |
 | `layer3`: lower-rate scalefactors, their partitions and preflag | FFmpeg, libavcodec/mpegaudiodec_template.c (lsf_sf_expand) and libavcodec/mpegaudiodec_common.c (ff_lsf_nsf_table). mpg123, src/libmpg123/layer3.c (III_get_scale_factors_2) |
 | `layer3`: lower-rate intensity ratios and the intensity scale | FFmpeg, libavcodec/mpegaudiodec_template.c (is_table_lsf). mpg123, src/libmpg123/layer3.c (III_i_stereo) |
@@ -72,7 +72,7 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `layer12`: the scalefactor table, with 0 for index 63 | mpg123, src/libmpg123/layer2.c (INT123_init_layer12_stuff). libmad, layer12.c and sf_table.dat |
 | `layer12`: a frame with the allocation 15 failing to decode | mpg123, src/libmpg123/layer1.c (check_balloc). libmad, layer12.c (mad_layer_I) |
 | `layer12`: the Layer I CRC covering the bit allocation | libmad, layer12.c (mad_layer_I). The ISO/IEC 14496-26 conformance streams with CRCs |
-| `layer12`: Layer II allocation tables and quantization classes | Transcribed from FFmpeg, libavcodec/mpegaudiodata.c (ff_mpa_alloc_tables, ff_mpa_quant_steps and ff_mpa_quant_bits), LGPL-2.1-or-later. Every entry agrees with mpg123, src/libmpg123/l2tables.h, and libmad, layer12.c (sbquant_table, bitalloc_table, offset_table) and qc_table.dat |
+| `layer12`: Layer II allocation tables and quantization classes | The ISO allocation tables, in runs of subbands that share their classes. Every entry agrees with minimp3, minimp3.h (g_bitalloc_code_tab and L12_subband_alloc_table), mpg123, src/libmpg123/l2tables.h, and libmad, layer12.c (sbquant_table, bitalloc_table, offset_table) and qc_table.dat |
 | `layer12`: the Layer II table for each bitrate per channel and sampling frequency | mpg123, src/libmpg123/layer2.c (II_select_table). FFmpeg, libavcodec/mpegaudio.c (ff_mpa_l2_select_table). libmad, layer12.c (mad_layer_II). ISO's bitrates for each table, as TwoLAME's notes on Layer II VBR quote them |
 | `layer12`: Layer II allocations, scalefactor selections, scalefactors and granules, their order and the joint stereo bound | FFmpeg, libavcodec/mpegaudiodec_template.c (mp_decode_layer2). mpg123, src/libmpg123/layer2.c (II_step_one and II_step_two). libmad, layer12.c (mad_layer_II) |
 | `layer12`: Layer II ungrouping and requantization | libmad, layer12.c (II_samples) and qc_table.dat. FFmpeg, libavcodec/mpegaudiodec_template.c (l2_unscale_group) and libavcodec/mpegaudiodec_common.c (ff_division_tabs) |
@@ -82,4 +82,4 @@ The decoder takes each part from the best source for it. Any source whose licenc
 | `frame`, `mp3`: the frames decoded before a Layer I or Layer II seek's target, from the sets of subband samples the synthesis carries | The synthesis filterbank of this decoder |
 | `trig`: π and cosines | Machin's formula and the Taylor series of the cosine |
 
-No part adapts another decoder's code. The Huffman code tables, the synthesis window taps and the Layer II allocation tables are data transcribed from FFmpeg.
+No part adapts another decoder's code. The synthesis window taps are data transcribed from PDMP3.

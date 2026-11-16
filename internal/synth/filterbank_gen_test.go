@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"flag"
 	"go/format"
+	"math"
 	"os"
 	"strconv"
 	"testing"
@@ -23,46 +24,7 @@ const generatedFile = "filterbank_gen.go"
 // update rewrites the generated tables from their closed forms instead of checking them.
 var update = flag.Bool("update", false, "rewrite the generated tables from their closed forms")
 
-// publishedUnits holds the first 257 taps of the synthesis window in units of 2^-16, transcribed
-// from FFmpeg's integer table.
-var publishedUnits = [windowTaps/2 + 1]int{
-	0, -1, -1, -1, -1, -1, -1, -2,
-	-2, -2, -2, -3, -3, -4, -4, -5,
-	-5, -6, -7, -7, -8, -9, -10, -11,
-	-13, -14, -16, -17, -19, -21, -24, -26,
-	-29, -31, -35, -38, -41, -45, -49, -53,
-	-58, -63, -68, -73, -79, -85, -91, -97,
-	-104, -111, -117, -125, -132, -139, -147, -154,
-	-161, -169, -176, -183, -190, -196, -202, -208,
-	213, 218, 222, 225, 227, 228, 228, 227,
-	224, 221, 215, 208, 200, 189, 177, 163,
-	146, 127, 106, 83, 57, 29, -2, -36,
-	-72, -111, -153, -197, -244, -294, -347, -401,
-	-459, -519, -581, -645, -711, -779, -848, -919,
-	-991, -1064, -1137, -1210, -1283, -1356, -1428, -1498,
-	-1567, -1634, -1698, -1759, -1817, -1870, -1919, -1962,
-	-2001, -2032, -2057, -2075, -2085, -2087, -2080, -2063,
-	2037, 2000, 1952, 1893, 1822, 1739, 1644, 1535,
-	1414, 1280, 1131, 970, 794, 605, 402, 185,
-	-45, -288, -545, -814, -1095, -1388, -1692, -2006,
-	-2330, -2663, -3004, -3351, -3705, -4063, -4425, -4788,
-	-5153, -5517, -5879, -6237, -6589, -6935, -7271, -7597,
-	-7910, -8209, -8491, -8755, -8998, -9219, -9416, -9585,
-	-9727, -9838, -9916, -9959, -9966, -9935, -9863, -9750,
-	-9592, -9389, -9139, -8840, -8492, -8092, -7640, -7134,
-	6574, 5959, 5288, 4561, 3776, 2935, 2037, 1082,
-	70, -998, -2122, -3300, -4533, -5818, -7154, -8540,
-	-9975, -11455, -12980, -14548, -16155, -17799, -19478, -21189,
-	-22929, -24694, -26482, -28289, -30112, -31947, -33791, -35640,
-	-37489, -39336, -41176, -43006, -44821, -46617, -48390, -50137,
-	-51853, -53534, -55178, -56778, -58333, -59838, -61289, -62684,
-	-64019, -65290, -66494, -67629, -68692, -69679, -70590, -71420,
-	-72169, -72835, -73415, -73908, -74313, -74630, -74856, -74992,
-	75038,
-}
-
-// publishedWindow holds the 512 taps of the synthesis window to 9 decimals, transcribed apart from
-// publishedUnits from the reference decoder's table.
+// publishedWindow holds the 512 taps D(i) of the synthesis window, rounded to 9 decimals.
 var publishedWindow = [windowTaps]float64{
 	0.000000000, -0.000015259, -0.000015259, -0.000015259, -0.000015259, -0.000015259, -0.000015259, -0.000030518,
 	-0.000030518, -0.000030518, -0.000030518, -0.000045776, -0.000045776, -0.000061035, -0.000061035, -0.000076294,
@@ -88,7 +50,7 @@ var publishedWindow = [windowTaps]float64{
 	-0.120697021, -0.125259399, -0.129562378, -0.133590698, -0.137298584, -0.140670776, -0.143676758, -0.146255493,
 	-0.148422241, -0.150115967, -0.151306152, -0.151962280, -0.152069092, -0.151596069, -0.150497437, -0.148773193,
 	-0.146362305, -0.143264771, -0.139450073, -0.134887695, -0.129577637, -0.123474121, -0.116577148, -0.108856201,
-	0.100311279, 0.090927124, 0.080688477, 0.069595337, 0.057617187, 0.044784546, 0.031082153, 0.016510010,
+	0.100311279, 0.090927124, 0.080688477, 0.069595337, 0.057617188, 0.044784546, 0.031082153, 0.016510010,
 	0.001068115, -0.015228271, -0.032379150, -0.050354004, -0.069168091, -0.088775635, -0.109161377, -0.130310059,
 	-0.152206421, -0.174789429, -0.198059082, -0.221984863, -0.246505737, -0.271591187, -0.297210693, -0.323318481,
 	-0.349868774, -0.376800537, -0.404083252, -0.431655884, -0.459472656, -0.487472534, -0.515609741, -0.543823242,
@@ -103,7 +65,7 @@ var publishedWindow = [windowTaps]float64{
 	0.572036743, 0.543823242, 0.515609741, 0.487472534, 0.459472656, 0.431655884, 0.404083252, 0.376800537,
 	0.349868774, 0.323318481, 0.297210693, 0.271591187, 0.246505737, 0.221984863, 0.198059082, 0.174789429,
 	0.152206421, 0.130310059, 0.109161377, 0.088775635, 0.069168091, 0.050354004, 0.032379150, 0.015228271,
-	-0.001068115, -0.016510010, -0.031082153, -0.044784546, -0.057617187, -0.069595337, -0.080688477, -0.090927124,
+	-0.001068115, -0.016510010, -0.031082153, -0.044784546, -0.057617188, -0.069595337, -0.080688477, -0.090927124,
 	0.100311279, 0.108856201, 0.116577148, 0.123474121, 0.129577637, 0.134887695, 0.139450073, 0.143264771,
 	0.146362305, 0.148773193, 0.150497437, 0.151596069, 0.152069092, 0.151962280, 0.151306152, 0.150115967,
 	0.148422241, 0.146255493, 0.143676758, 0.140670776, 0.137298584, 0.133590698, 0.129562378, 0.125259399,
@@ -133,10 +95,11 @@ var publishedWindow = [windowTaps]float64{
 // TestSynthTables checks that the generated tables hold the window and the DCT's factors, or
 // rewrites them with -update.
 //
-// Each tap must agree with the 9-decimal table to within its rounding. The factors must round
-// exactly from 320 bits and agree with their cosines.
+// Each published tap must lie within its 9-decimal rounding of a multiple of 2^-16. Tap 512-i must
+// be tap i, negated unless i is a multiple of 64. The factors must round exactly from 320 bits and
+// agree with their cosines.
 func TestSynthTables(t *testing.T) {
-	want := windowFromUnits()
+	want := windowFromPublished()
 	factors := closedFactors()
 
 	if *update {
@@ -152,6 +115,18 @@ func TestSynthTables(t *testing.T) {
 
 	for tap, published := range publishedWindow {
 		assert.InDelta(t, published, window[tap], 5.1e-10, "tap %d", tap)
+
+		if tap == 0 {
+			continue
+		}
+
+		mirror := publishedWindow[windowTaps-tap]
+
+		if tap%vectorSize != 0 {
+			mirror = -mirror
+		}
+
+		assert.InDelta(t, published, mirror, 0, "tap %d", tap)
 	}
 
 	at := 0
@@ -166,23 +141,12 @@ func TestSynthTables(t *testing.T) {
 	}
 }
 
-// windowFromUnits builds the 512 taps from the first 257.
-//
-// Tap 512-i is tap i, negated unless i is a multiple of 64.
-func windowFromUnits() [windowTaps]float64 {
+// windowFromPublished rounds each published tap to the nearest multiple of 2^-16.
+func windowFromPublished() [windowTaps]float64 {
 	var out [windowTaps]float64
 
-	for tap, units := range publishedUnits {
-		value := float64(units) / (1 << 16)
-		out[tap] = value
-
-		if tap%vectorSize != 0 {
-			value = -value
-		}
-
-		if tap != 0 {
-			out[windowTaps-tap] = value
-		}
+	for tap, published := range publishedWindow {
+		out[tap] = math.Round(published*(1<<16)) / (1 << 16)
 	}
 
 	return out
