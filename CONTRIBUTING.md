@@ -24,7 +24,7 @@ Thank you for helping with the decoder. This guide explains how to work on it an
 - [Documentation](#documentation)
 - [Commit Messages](#commit-messages)
 - [Pull Requests](#pull-requests)
-- [Releases](#releases)
+- [Semantic Releases](#semantic-releases)
 - [AI-Assisted Contributions](#ai-assisted-contributions)
 - [License](#license)
 
@@ -238,7 +238,11 @@ fix(container): read Xing, Info and VBRI tags only in Layer III frames
 
 - State in the body that `task check` passes, since CI does not run the conformance test. Every CI check must pass too.
 
-## Releases
+## Semantic Releases
+
+Versions follow [Semantic Versioning](https://semver.org). Fixes go in patch releases and new API in minor releases. Only a breaking change takes a major release, and that holds in v0 too.
+
+From v2 on, the module path ends in the major version, as [Go's guide to major versions](https://go.dev/doc/modules/major-version) describes. Before tagging v2, change the path in `go.mod` and in every import within the module.
 
 Maintainers release from an up-to-date `main` with `task tag:bump-patch`, `task tag:bump-minor` or `task tag:bump-major`. Each finds the latest `vX.Y.Z` tag on origin and asks before it tags the next version. Then it pushes the tag. It refuses to tag in these cases:
 
