@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Chores
 
+- Add community code of conduct by @nicholas-fedor in [#20](https://github.com/nicholas-fedor/mp3-decoder/pull/20)
 - Add a vulnerability disclosure policy by @nicholas-fedor in [#18](https://github.com/nicholas-fedor/mp3-decoder/pull/18)
 
 ## [0.2.0] - 2026-11-16
