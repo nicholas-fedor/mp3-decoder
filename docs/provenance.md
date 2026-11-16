@@ -1,6 +1,6 @@
 # Provenance
 
-The decoder takes each part from the best source for it. Any source whose licence combines with AGPL-3.0 may be studied, and its algorithms, tables and code may be adopted. Code adapted from another decoder is listed here with its licence. The [references](references.md) list every source.
+The decoder takes each part from the best source for it. Any source may be studied, and its algorithms and behavior adopted. Code and data are adapted only from sources in the public domain or under a permissive licence. Code adapted from another decoder is listed here with its licence. The [references](references.md) list every source.
 
 ## Parts
 

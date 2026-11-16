@@ -1,5 +1,5 @@
 // Copyright (c) Nicholas Fedor 2026 <nick@nickfedor.com>
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: Apache-2.0
 
 // Command fetch fills a cache with the MPEG audio conformance streams of ISO/IEC 14496-26 and
 // their references, which the conformance test reads from the directory MP3_DECODER_CONFORMANCE

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) Nicholas Fedor 2026 <nick@nickfedor.com>
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: Apache-2.0
 #
 # Regenerates the Layer II and Layer III fixtures in this directory and the references decoded from
 # them. Requires ffmpeg, lame, twolame and mpg123. Every fixture encodes 0.5 s of a 440 Hz tone with

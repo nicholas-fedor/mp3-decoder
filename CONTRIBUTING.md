@@ -125,11 +125,11 @@ The decoder is scalar Go with no assembly. `Read` and `Seek` allocate nothing, a
 
 ### Sources
 
-Code comments cite no sources. [References](docs/references.md) lists every source, and [Provenance](docs/provenance.md) says what each part was written from. Code adapted from another decoder gets a row in Provenance with its licence. Any source whose licence combines with AGPL-3.0 may be studied and adapted.
+Code comments cite no sources. [References](docs/references.md) lists every source, and [Provenance](docs/provenance.md) says what each part was written from. Code adapted from another decoder gets a row in Provenance with its licence. Any source may be studied for how it behaves. Code and data are adapted only from sources in the public domain or under a permissive licence, such as MIT, BSD, Apache-2.0 or CC0. Code under the GPL, LGPL or MPL is never adapted.
 
 ## Code Style
 
-- Every Go file starts with the copyright line and `SPDX-License-Identifier: AGPL-3.0-or-later`.
+- Every Go file starts with the copyright line and `SPDX-License-Identifier: Apache-2.0`.
 - Every package has a `doc.go`. Every declaration has a doc comment, with `Parameters:` and `Returns:` sections on functions and methods.
 - A doc comment opens with a one-sentence summary. Details go in a paragraph of their own.
 - Comments describe what the code does now and why, never its history.
@@ -264,4 +264,4 @@ AI tools are welcome, on the same terms as any other code:
 
 ## License
 
-By contributing, you agree that your contributions are licensed under the [GNU Affero General Public License v3.0 or later](LICENSE.md).
+By contributing, you agree that your contributions are licensed under the [Apache License 2.0](LICENSE).
