@@ -8,9 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+### Changed
 
-- Fix the release's calls to the test and pkg.go.dev workflows by @nicholas-fedor
+- Rework the README for users of the module by @nicholas-fedor in [#7](https://github.com/nicholas-fedor/mp3-decoder/pull/7)
 
 ## [0.1.0] - 2026-11-15
 
@@ -67,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fix the release's calls to the test and pkg.go.dev workflows by @nicholas-fedor
 - Fix the golangci-lint config's schema errors by @nicholas-fedor
 - Read Xing, Info and VBRI tags only in Layer III frames by @nicholas-fedor
 - Skip stereo for a granule whose main data is missing by @nicholas-fedor
@@ -83,7 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New Contributors
 
-- @github-actions[bot] made their first contribution in [#5](https://github.com/nicholas-fedor/mp3-decoder/pull/5)
+- @github-actions[bot] made their first contribution in [#6](https://github.com/nicholas-fedor/mp3-decoder/pull/6)
 - @nicholas-fedor made their first contribution
 - @renovate[bot] made their first contribution in [#2](https://github.com/nicholas-fedor/mp3-decoder/pull/2)
 
