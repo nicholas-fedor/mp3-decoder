@@ -1,51 +1,71 @@
-# mp3
+<!-- markdownlint-disable MD033 MD041 -->
+<div align="center">
 
-A pure-Go MPEG audio decoder for MPEG-1, MPEG-2 and MPEG-2.5 audio in Layers I, II and III.
+<img src=".github/assets/logo.svg" alt="mp3-decoder logo" width="160">
 
-## Goals
+# mp3-decoder
 
-- **Conformance:** full accuracy, as ISO/IEC 11172-4 clause 2.6.3 defines it, on every stream of the ISO/IEC 14496-26 conformance package.
-- **Compatibility:** it plays every stream that FFmpeg and mpg123 play.
-- **Performance:** fast scalar Go with no allocations per frame.
-- **Determinism:** identical output on every architecture.
+[![Go Reference](https://pkg.go.dev/badge/github.com/nicholas-fedor/mp3-decoder.svg)](https://pkg.go.dev/github.com/nicholas-fedor/mp3-decoder)
+[![Coverage](https://codecov.io/gh/nicholas-fedor/mp3-decoder/graph/badge.svg)](https://codecov.io/gh/nicholas-fedor/mp3-decoder)
+[![License](https://img.shields.io/github/license/nicholas-fedor/mp3-decoder)](LICENSE.md)
 
-## Status
+A pure-Go decoder for MPEG-1, MPEG-2 and MPEG-2.5 audio in Layers I, II and III.
 
-The decoder decodes every stream of ISO's conformance package at full accuracy, as [Conformance](docs/conformance.md) records.
+</div>
+
+## Features
+
+- Full-accuracy conformance on ISO's test streams ([Conformance](docs/conformance.md))
+- Bit-identical output on every architecture
+- Gapless playback using LAME tags
+- Sample-exact seeking
+- Free-format bitrates
+- Recovery from corrupt data, with damage statistics
+- Tolerance for out-of-spec streams that mpg123 and FFmpeg accept
+- No cgo, assembly or dependencies beyond the standard library
+- No allocations per frame
+- Decoding at about 890× real time ([Performance](docs/design.md#performance))
+
+## Supported Formats
 
 | Layer | MPEG-1 | MPEG-2 | MPEG-2.5 |
 | --- | --- | --- | --- |
-| Layer I | Full accuracy | Full accuracy | Decoded as MPEG-2 is, with no conformance streams to measure |
-| Layer II | Full accuracy | Full accuracy | Decoded as MPEG-2 is, with no conformance streams to measure |
+| Layer I | Full accuracy | Full accuracy | Decoded |
+| Layer II | Full accuracy | Full accuracy | Decoded |
 | Layer III | Full accuracy | Full accuracy | Full accuracy |
 
-It also does the following:
-
-- **Gapless playback:** it leaves out the encoder delay and padding a LAME tag gives.
-- **Seeking:** it seeks to any sample exactly, to the same samples a decode from the start gives.
-- **Free format:** it decodes free-format streams, which FFmpeg refuses.
-- **Damage:** it carries on past damage and junk, and counts what it met.
+- Full accuracy means the output matches ISO's reference decodes within the limits ISO/IEC 11172-4 sets.
+- Decoded means the format is supported but unmeasured, because ISO publishes no test streams for it.
 
 ## Usage
 
-### Adding the Module
+### Prerequisites
+
+- Requires Go 1.27+.
+
+### Installation
+
+To add the module:
 
 ```sh
 go get github.com/nicholas-fedor/mp3-decoder
 ```
 
-The package at the module's root is named `mp3`, so an import gives it that name.
+Add the following import:
 
 ```go
 import "github.com/nicholas-fedor/mp3-decoder"
 ```
 
+> [!NOTE]
+> The import path ends in `mp3-decoder`, but the package is named `mp3`.
+
 ### Decoding a Stream
 
-`mp3.OpenStream` takes any `io.Reader`, such as a network stream. `Read` fills a buffer with samples and returns `io.EOF`, unwrapped, after the last one.
+`mp3.OpenStream` decodes from any `io.Reader`, such as an HTTP response body. `Read` fills the buffer and returns a bare `io.EOF` after the last sample. In this example, `play` stands in for your audio output.
 
 ```go
-decoder, err := mp3.OpenStream(ctx, stream)
+decoder, err := mp3.OpenStream(ctx, response.Body)
 if err != nil {
     return err
 }
@@ -66,11 +86,17 @@ for {
 }
 ```
 
-Samples come as left and right pairs, unclipped, with full scale at 1. A mono stream gives each sample to both channels. The decoder does not close its source.
+Each sample is a `[2]float64`:
+
+- Index 0 is the left channel and index 1 the right.
+- Mono streams have the same value in both channels.
+- Values are not clipped. Full scale is ±1.
+
+The decoder does not close the reader you pass it.
 
 ### Decoding a File
 
-`mp3.Open` takes an `io.ReadSeeker`. It also finds the number of samples the file decodes to, and it can seek.
+`mp3.Open` takes an `io.ReadSeeker`, such as an `*os.File`. It also reports the length in samples and supports seeking.
 
 ```go
 decoder, err := mp3.Open(ctx, file)
@@ -78,7 +104,7 @@ if err != nil {
     return err
 }
 
-length, _ := decoder.Len()
+length, _ := decoder.Len() // Always known for a decoder from mp3.Open.
 
 err = decoder.Seek(ctx, length/2)
 if err != nil {
@@ -86,38 +112,74 @@ if err != nil {
 }
 ```
 
-### Methods
+### Converting Samples
 
-| Method | What it gives |
+Many audio APIs expect interleaved 16-bit PCM. This function clips each value to ±1 and scales it to `int16`.
+
+```go
+// toInt16 appends samples to pcm as interleaved 16-bit values, clipped to full scale.
+func toInt16(pcm []int16, samples [][2]float64) []int16 {
+    for _, pair := range samples {
+        for _, sample := range pair {
+            pcm = append(pcm, int16(math.Round(max(-1, min(sample, 1))*math.MaxInt16)))
+        }
+    }
+
+    return pcm
+}
+```
+
+## API
+
+| Method | Does |
 | --- | --- |
-| `Info` | The sampling frequency and the number of channels |
-| `Read` | The next samples |
-| `Len` | The number of samples, for a decoder from `mp3.Open` |
-| `Seek` | A move to any sample, for a decoder from `mp3.Open` |
-| `Position` | The number of the sample `Read` gives next |
-| `Stats` | Counts of the damage decoding carried on past |
+| `Info` | Returns the sample rate and channel count |
+| `Read` | Decodes the next samples into a buffer |
+| `Len` | Returns the length in samples, for a decoder from `mp3.Open` |
+| `Seek` | Moves to any sample, for a decoder from `mp3.Open` |
+| `Position` | Returns the index of the next sample `Read` returns |
+| `Stats` | Returns the frame count and counts of the damage the decoder recovered from |
+
+Besides errors from the reader and the context, the package returns these sentinel errors. Check for them with `errors.Is`, since `Seek` wraps `ErrOutOfRange`.
+
+| Error | Returned when |
+| --- | --- |
+| `ErrNoFrames` | `Open` or `OpenStream` finds no MPEG audio frames |
+| `ErrNotSeekable` | `Seek` is called on a decoder from `mp3.OpenStream` |
+| `ErrOutOfRange` | `Seek` is given a sample below 0 or above `Len` |
 
 ## Packages
 
-| Package | What it holds |
+| Package | Contents |
 | --- | --- |
-| [mp3](https://pkg.go.dev/github.com/nicholas-fedor/mp3-decoder) | `Open`, `OpenStream` and the `Decoder`, which reads, seeks and counts damage |
-| [frame](https://pkg.go.dev/github.com/nicholas-fedor/mp3-decoder/frame) | Frame headers of every layer and version (`Parse` and `Header`), the confirmed frame search (`Find`) and the CRC check |
-| [container](https://pkg.go.dev/github.com/nicholas-fedor/mp3-decoder/container) | The tags at the start of a stream (`TagSize`) and at its end (`TrailerSize`), and the Xing, Info, LAME and VBRI tags (`ParseInfo`) |
+| [mp3](https://pkg.go.dev/github.com/nicholas-fedor/mp3-decoder) | The decoder (`Open`, `OpenStream` and `Decoder`) |
+| [frame](https://pkg.go.dev/github.com/nicholas-fedor/mp3-decoder/frame) | Header parsing (`Parse` and `Header`), frame sync (`Find`) and CRC checks |
+| [container](https://pkg.go.dev/github.com/nicholas-fedor/mp3-decoder/container) | Tag sizes at the start and end of a stream (`TagSize` and `TrailerSize`), and Xing, Info, LAME and VBRI tags (`ParseInfo`) |
 
-`frame` and `container` read a stream's structure without decoding its audio, and neither imports the decoder. A program that needs only a stream's format, length or tags can use them alone. Each package's documentation shows how.
+`frame` and `container` don't import the decoder. Use them on their own to read a stream's format, length or tags without decoding any audio.
 
-## Contributing
+## Out of Scope
 
-[CONTRIBUTING.md](CONTRIBUTING.md) explains how to work on the decoder and test it.
+- Encoding audio
+- Reading ID3 or APEv2 metadata such as titles (`container` reports only tag sizes)
+- Resampling
+- Demuxing MP4 or other containers
+
+## Versioning
+
+Releases follow [Semantic Versioning](https://semver.org).
 
 ## Documentation
 
-- [References](docs/references.md) lists the standards, descriptions, decoders and papers behind the code.
-- [Provenance](docs/provenance.md) says what each part was written from.
-- [Design](docs/design.md) records the decisions that shape the decoder.
-- [Conformance](docs/conformance.md) records how the decoder measures against ISO's conformance streams.
+- [References](docs/references.md) lists the standards, papers and decoders the code draws on.
+- [Provenance](docs/provenance.md) gives the source of each part of the code.
+- [Design](docs/design.md) explains how each part works and why.
+- [Conformance](docs/conformance.md) has the results on ISO's test streams.
 
-## Licence
+## Contributing
 
-AGPL-3.0-or-later.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers setup, testing and the rules for changes.
+
+## License
+
+mp3-decoder is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE.md).
