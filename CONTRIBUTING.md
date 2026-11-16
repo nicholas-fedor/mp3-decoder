@@ -85,6 +85,7 @@ The public packages are `mp3` at the root, [frame](frame) and [container](contai
 | [internal/layer12](internal/layer12) | Decodes the audio data of Layer I and Layer II frames, as [Layer I Decoding](docs/design.md#layer-i-decoding) and [Layer II Decoding](docs/design.md#layer-ii-decoding) describe |
 | [internal/synth](internal/synth) | Turns polyphase subband samples into PCM samples, for every layer |
 | [internal/trig](internal/trig) | Computes the exact sines and cosines of the generated tables, for their tests |
+| [internal/generated](internal/generated) | Writes the source of the generated files, with their header and notice, for the tests that generate them |
 | [internal/mp3test](internal/mp3test) | Builds bitstreams for tests |
 | [internal/conformance](internal/conformance) | Measures the decoder against ISO's conformance streams, with the command that fetches them in `internal/conformance/fetch` |
 

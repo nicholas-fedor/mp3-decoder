@@ -429,7 +429,7 @@ The scaling reaches 10.2 at 32 points, so the fast form rounds a little more tha
 
 #### Window
 
-The 512 taps D(i) are exact multiples of 2^-16. FFmpeg lists the first 257 as integers in those units, and tap 512-i is tap i, negated unless i is a multiple of 64. The window is generated from that list, and the test checks every tap against dist10's table of 512 taps to 9 decimals.
+The 512 taps D(i) are exact multiples of 2^-16. The window is generated from PDMP3's table of the taps to 9 decimals, with each tap rounded to the nearest multiple. The test checks that every published tap lies within its rounding of that multiple. It also checks that tap 512-i is tap i, negated unless i is a multiple of 64.
 
 Two further checks bind the window and the matrixing together:
 
