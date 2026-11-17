@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Chores
 
+- Update actions/setup-go action to v7.1.0 by @renovate[bot] in [#22](https://github.com/nicholas-fedor/mp3-decoder/pull/22)
 - Add community code of conduct by @nicholas-fedor in [#20](https://github.com/nicholas-fedor/mp3-decoder/pull/20)
 - Add a vulnerability disclosure policy by @nicholas-fedor in [#18](https://github.com/nicholas-fedor/mp3-decoder/pull/18)
 
