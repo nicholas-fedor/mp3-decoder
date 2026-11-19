@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Scan for gosec findings with the lint config by @nicholas-fedor in [#26](https://github.com/nicholas-fedor/mp3-decoder/pull/26)
+
 ### Chores
 
 - Update step-security/harden-runner action to v2.23.0 by @renovate[bot] in [#24](https://github.com/nicholas-fedor/mp3-decoder/pull/24)
