@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Chores
 
+- Update github/codeql-action action to v4.39.4 by @renovate[bot] in [#28](https://github.com/nicholas-fedor/mp3-decoder/pull/28)
 - Update step-security/harden-runner action to v2.23.0 by @renovate[bot] in [#24](https://github.com/nicholas-fedor/mp3-decoder/pull/24)
 - Update actions/setup-go action to v7.1.0 by @renovate[bot] in [#22](https://github.com/nicholas-fedor/mp3-decoder/pull/22)
 - Add community code of conduct by @nicholas-fedor in [#20](https://github.com/nicholas-fedor/mp3-decoder/pull/20)
