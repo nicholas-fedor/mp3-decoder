@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Chores
 
+- Update zizmorcore/zizmor-action action to v0.9.2 by @renovate[bot] in [#32](https://github.com/nicholas-fedor/mp3-decoder/pull/32)
 - Update zizmorcore/zizmor-action action to v0.9.0 by @renovate[bot] in [#30](https://github.com/nicholas-fedor/mp3-decoder/pull/30)
 - Update github/codeql-action action to v4.39.4 by @renovate[bot] in [#28](https://github.com/nicholas-fedor/mp3-decoder/pull/28)
 - Update step-security/harden-runner action to v2.23.0 by @renovate[bot] in [#24](https://github.com/nicholas-fedor/mp3-decoder/pull/24)
